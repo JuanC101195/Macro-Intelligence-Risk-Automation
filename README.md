@@ -2,7 +2,7 @@
 
 Plataforma experimental de inteligencia financiera y trading algorítmico: datos de MetaTrader 5, contexto macro de Crucix, estrategia técnica determinística, gestión de riesgo independiente, backtesting, paper trading y ejecución en cuenta **demo**.
 
-> **Aviso.** Proyecto personal y de aprendizaje. No es asesoría financiera. Las señales son experimentales. El modo `live` está bloqueado: el sistema no opera con dinero real.
+> **Aviso.** Software propietario, uso interno. No es asesoría financiera. Las señales son experimentales. El modo `live` está bloqueado: el sistema no opera con dinero real.
 
 ## Estado
 

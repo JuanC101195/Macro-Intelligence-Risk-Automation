@@ -19,6 +19,12 @@ htmlcov/
 dist/
 build/
 
+# Business-sensitive while the repo is public (ADR 0001 #14)
+config/tuned/
+*.tuned.yaml
+research/reports/*
+!research/reports/.gitkeep
+
 # Data and artifacts
 *.db
 *.sqlite
