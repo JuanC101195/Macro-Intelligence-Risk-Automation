@@ -5,7 +5,7 @@
 
 ## Contexto
 
-Proyecto personal y de aprendizaje que arranca desde cero, siguiendo `CLAUDE.md`.
+Emprendimiento propio que arranca desde cero, siguiendo `CLAUDE.md`. El objetivo a largo plazo es operar con capital real **propio**. Eso solo se considerará después de la Fase 12, con evidencia fuera de muestra y una ADR nueva. Durante el MVP, live sigue bloqueado.
 Antes de diseñar hubo que fijar algunas decisiones que `CLAUDE.md` deja abiertas.
 
 ## Decisiones
@@ -26,6 +26,7 @@ Antes de diseñar hubo que fijar algunas decisiones que `CLAUDE.md` deja abierta
 | 11 | `OrderIntent.mode` admite `backtest` | El backtest reutiliza `RiskEngine`; con solo `paper`/`demo` habría que etiquetar mal las intenciones simuladas. |
 | 12 | Riesgo por defecto 0.25 %; 0.5 % es el techo | Opción más conservadora del rango de `CLAUDE.md` §10. |
 | 13 | Día de trading desde las 17:00 de Nueva York | Coincide con el rollover FX; no parte la sesión asiática. |
+| 14 | Código propietario. Repo **público durante la fase de pruebas**; pasa a **privado antes de operar con capital real** | Decisión de Juan. Hacerlo privado después no retira lo ya publicado, por eso mientras sea público **no se suben** parámetros afinados, modelos entrenados, resultados de backtest ni datos de cuenta (van en archivos ignorados por git). `LICENSE` = "All rights reserved". |
 
 ## Consecuencias
 
