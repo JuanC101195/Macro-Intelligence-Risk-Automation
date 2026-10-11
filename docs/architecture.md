@@ -54,12 +54,14 @@
 | `macro` | `config`, `monitoring` | `broker`, `risk`, `execution` |
 | `strategy` | contratos de `broker` y `macro` (tipos) | `risk`, `execution`, `broker.mt5_client` |
 | `models` | `strategy` (features) | `risk`, `execution` |
-| `risk` | tipos de `broker`, `strategy` | `execution`, `macro.crucix_client`, `models` |
-| `execution` | `risk` (tipo `OrderIntent`), `broker` | `strategy`, `models` |
+| `risk` | `config`, tipos de `broker` y `strategy`, `execution.order_intent` (solo tipos) | executors (`paper_executor`, `demo_executor`), `macro.crucix_client`, `models` |
+| `execution` | `broker` (tipos) | `strategy`, `models`, `macro` |
 | `backtest` | `strategy`, `risk`, `execution.paper_executor` | `broker.mt5_client` |
 | `api` | servicios y repositorios | `broker.orders` (nunca envía órdenes directamente) |
 
-Un test de arquitectura (Fase 1) verificará estas reglas con `import-linter` o un test propio.
+`tests/safety/test_architecture.py` verifica estas reglas sobre el código (análisis AST de imports). También verifica que `MetaTrader5` solo se importe en `broker/mt5_client.py` y que `order_send` no aparezca en ningún archivo antes de la Fase 11.
+
+`OrderIntent` vive en `execution/order_intent.py` (ruta de `CLAUDE.md`). Ese módulo contiene **solo tipos**, para que `risk/` pueda construir intenciones sin depender de ningún executor.
 
 ## 3. Modos de operación
 
