@@ -1,0 +1,41 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Data and artifacts
+*.db
+*.sqlite
+*.parquet
+research/datasets/*
+!research/datasets/.gitkeep
+src/trading_system/models/artifacts/*
+!src/trading_system/models/artifacts/.gitkeep
+logs/
+*.log
+
+# Node
+node_modules/
+apps/dashboard/dist/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

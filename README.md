@@ -1,0 +1,34 @@
+# Intelligence Trading Platform
+
+Plataforma experimental de inteligencia financiera y trading algorítmico: datos de MetaTrader 5, contexto macro de Crucix, estrategia técnica determinística, gestión de riesgo independiente, backtesting, paper trading y ejecución en cuenta **demo**.
+
+> **Aviso.** Proyecto personal y de aprendizaje. No es asesoría financiera. Las señales son experimentales. El modo `live` está bloqueado: el sistema no opera con dinero real.
+
+## Estado
+
+Fase 0 — arquitectura. Todavía no hay código. Ver [`docs/progress.md`](docs/progress.md).
+
+## Documentación
+
+| Documento | Contenido |
+|-----------|-----------|
+| [`CLAUDE.md`](CLAUDE.md) | Requisitos y reglas del proyecto |
+| [`docs/architecture.md`](docs/architecture.md) | Componentes, flujo y contratos entre módulos |
+| [`docs/risk-policy.md`](docs/risk-policy.md) | Límites, lotaje, stops, circuit breaker |
+| [`docs/model-policy.md`](docs/model-policy.md) | Validación y ciclo de vida de modelos ML |
+| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Fases, tareas, criterios de aceptación, primer sprint |
+| [`docs/progress.md`](docs/progress.md) | Bitácora |
+| [`docs/decisions/`](docs/decisions/) | ADRs |
+
+## Alcance del MVP
+
+- Símbolos: EURUSD, GBPUSD, USDJPY — timeframe M15.
+- Modos: `backtest`, `paper` (por defecto), `demo` (requiere activación explícita). `live` bloqueado.
+- Riesgo por operación: 0.25 %–0.5 % del equity; pérdida diaria máxima 2 %.
+
+## Requisitos (a partir de Fase 1)
+
+- Windows con terminal MetaTrader 5 (el paquete `MetaTrader5` solo funciona en Windows).
+- Python 3.12.
+- Node.js 20+ (Crucix y dashboard).
+- Docker (PostgreSQL y n8n opcionales).
