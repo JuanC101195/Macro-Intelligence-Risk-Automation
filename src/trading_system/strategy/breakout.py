@@ -6,6 +6,7 @@
   SHORT when close > highest high of the previous `exit_window` bars.
 - Stop 2 x ATR(20) from the entry; take-profit 20 x ATR (contractual, non-binding).
 "Previous" never includes the current bar, so there is no look-ahead.
+Optional regime filter (ADR 0008): new entries only on bars labelled "trend".
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ class BreakoutParams(BaseModel):
     atr_period: int = 20
     stop_atr: float = Field(default=2.0, gt=0)
     target_atr: float = Field(default=20.0, gt=0)
+    timeframe: Timeframe = Timeframe.D1
 
 
 @dataclass(frozen=True)
@@ -57,8 +59,11 @@ def _prior_extremes(values: Sequence[float], window: int, use_max: bool) -> list
 
 
 class BreakoutStrategy:
-    def __init__(self, params: BreakoutParams, bars: Mapping[str, Sequence[Bar]]) -> None:
+    def __init__(self, params: BreakoutParams, bars: Mapping[str, Sequence[Bar]],
+                 regime: Mapping[str, Mapping[datetime, bool]] | None = None) -> None:
+        """`regime`: symbol -> {bar time: is trend}; None disables the filter."""
         self.params = params
+        self.regime = regime
         self._levels: dict[tuple[str, datetime], _Levels] = {}
         for sym, series in bars.items():
             highs = [b.high for b in series]
@@ -88,8 +93,8 @@ class BreakoutStrategy:
         """Engine decider hook (positional call); snapshot/params are unused here."""
         assert last_bar is not None
         common: dict[str, Any] = {
-            "signal_id": f"{self.params.version}-{symbol}-{last_bar.time:%Y%m%d}",
-            "symbol": symbol, "timeframe": Timeframe.D1, "bar_time": last_bar.time,
+            "signal_id": f"{self.params.version}-{symbol}-{last_bar.time:%Y%m%d%H}",
+            "symbol": symbol, "timeframe": self.params.timeframe, "bar_time": last_bar.time,
             "technical_score": 0, "macro_regime": macro.risk_regime,
             "strategy_version": self.params.version,
         }
@@ -102,6 +107,8 @@ class BreakoutStrategy:
             hold = "no_breakout"
         elif lv is None or lv.atr is None:
             hold = "indicators_not_ready"
+        else:
+            hold = self._regime_hold(symbol, last_bar.time)
         if hold or side is None or lv is None or lv.atr is None:
             return Signal(side=Side.HOLD, confidence=0.0, hold_reasons=(hold or "no_breakout",),
                           **common)
@@ -113,12 +120,20 @@ class BreakoutStrategy:
             target = max(target, entry * TARGET_FLOOR)
         return Signal(
             side=side, confidence=0.5,
-            reasons=(f"close_beyond_{self.params.entry_window}d_channel",),
+            reasons=(f"close_beyond_{self.params.entry_window}_bar_channel",),
             entry_ref=entry,
             stop_loss=round(entry - sign * self.params.stop_atr * lv.atr, spec.digits),
             take_profit=round(target, spec.digits),
             **common,
         )
+
+    def _regime_hold(self, symbol: str, t: datetime) -> str | None:
+        if self.regime is None:
+            return None
+        trend = self.regime.get(symbol, {}).get(t)
+        if trend is None:
+            return "regime_not_ready"
+        return None if trend else "regime_not_trend"
 
     def exit_check(self, symbol: str, bar: Bar, side: BrokerSide) -> bool:
         lv = self._levels.get((symbol, bar.time))

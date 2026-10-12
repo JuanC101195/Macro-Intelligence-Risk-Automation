@@ -297,6 +297,26 @@ def backtest_pairs(
     _write_report(result, out)
 
 
+@backtest_app.command("regime")
+def backtest_regime(
+    control: Annotated[bool, typer.Option(
+        help="Run the unfiltered H4 breakout control (ADR 0008)")] = False,
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+) -> None:
+    """Run regime-h4-v001 (H4 breakout + GMM regime filter) or its control (ADR 0008)."""
+    from trading_system.backtest import runner
+
+    symbols = ["XAUUSD", "XAGUSD", "US500", "US30", "EURUSD", "GBPUSD", "AUDUSD",
+               "NZDUSD", "USDJPY", "USDCAD", "USDCHF"]
+    bars, hashes = runner.load_datasets(data, symbols, Timeframe.H4)
+    result = runner.run_regime_suite(
+        bars, hashes, _load_rates(data), control=control, neighbours=neighbours,
+        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    _write_report(result, out)
+
+
 @backtest_app.command("run")
 def backtest_run(
     symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",
