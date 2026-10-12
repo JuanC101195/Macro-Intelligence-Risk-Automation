@@ -8,8 +8,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
+# uid 1000 = the host user that owns the bind-mounted data dir (azureuser on Ubuntu).
 RUN pip install . \
-    && useradd --create-home --uid 10001 itp \
+    && useradd --create-home --uid 1000 itp \
     && mkdir -p /data/macro_snapshots \
     && chown -R itp /data
 
