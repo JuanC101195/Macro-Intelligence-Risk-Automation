@@ -38,3 +38,10 @@ Montecarlo de drawdown, Deflated Sharpe Ratio y mapas de estabilidad: se harán 
 
 - Una dependencia pesada (numba, pandas 3, scikit-learn) entra solo en el extra `research` y en `uv.lock`; el núcleo y CI no cambian.
 - Las pruebas contra el azar pasan a ser parte del método: una mejora que no supera a filtros o entradas aleatorias no se considera evidencia.
+
+## Adenda 2026-10-12 — prueba 1 (antes de ejecutar la comparación del motor)
+
+- La comparación con vectorbt se hace con **costes en cero en ambos motores**: el motor propio modela bid/ask (un SHORT sale al ask y su stop se activa con el ask), y vectorbt usa una sola serie OHLC, así que con costes las diferencias serían de modelado y no de mecánica. Los costes ya están cubiertos por los tests con precios calculados a mano (`tests/backtest/test_engine.py`).
+- Se aplica en las señales de vectorbt la misma regla del motor de cancelar una entrada si la vela siguiente no es contigua (huecos de fin de semana o de sesión), y el mismo stop y take-profit en precio (convertidos a fracción del precio de entrada).
+- Se excluye la última operación de cada instrumento si queda abierta al final del periodo (el motor propio la cierra por `end_of_data`).
+- Resultado de la parte del GMM (ya ejecutada): coincide con scikit-learn hasta 1e-13 en medias y pesos, con el mismo número de iteraciones.
