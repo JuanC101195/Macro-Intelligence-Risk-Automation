@@ -16,7 +16,8 @@ from dataclasses import dataclass
 
 from trading_system.broker.contracts import SymbolSpec
 
-# Guards float noise like 0.12 / 0.01 = 11.999999999 without ever rounding up materially.
+# Guards against float noise (a volume of exactly 12 steps computed as 11.999999999...)
+# without ever rounding up materially.
 _EPS = 1e-9
 
 
@@ -35,8 +36,12 @@ def _decimals(step: float) -> int:
 
 
 def size_position(
-    equity: float, risk_fraction: float, entry: float, stop: float, spec: SymbolSpec
+    equity: float, risk_fraction: float, entry: float, stop: float, spec: SymbolSpec,
+    min_loss_per_lot: float = 0.0,
 ) -> SizingResult:
+    """`min_loss_per_lot`: a second estimate of the loss per lot at the stop (e.g. MT5's
+    order_calc_profit, which converts at the stop price). The larger estimate is used,
+    so the real risk is never underestimated."""
     if equity <= 0 or risk_fraction <= 0:
         return SizingResult(None, 0.0, 0.0, 0.0, "non_positive_equity_or_risk")
     risk_money = equity * risk_fraction
@@ -44,7 +49,7 @@ def size_position(
     if distance <= 0:
         return SizingResult(None, risk_money, 0.0, 0.0, "zero_stop_distance")
 
-    loss_per_lot = distance / spec.tick_size * spec.tick_value
+    loss_per_lot = max(distance / spec.tick_size * spec.tick_value, min_loss_per_lot)
     raw_volume = risk_money / loss_per_lot
     steps = math.floor(raw_volume / spec.volume_step + _EPS)
     volume = round(steps * spec.volume_step, _decimals(spec.volume_step))

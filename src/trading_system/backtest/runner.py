@@ -90,6 +90,7 @@ def evaluate_suite(
     limits: RiskLimits,
     assumptions: Sequence[str],
     currency_exposure_mult: float = 1.0,
+    initial_equity: float = 10_000.0,
     holdout: bool = False,
     neighbours: bool = True,
     progress: Callable[[str], None] = lambda _: None,
@@ -107,6 +108,7 @@ def evaluate_suite(
     base_cfg = BacktestConfig(symbols=symbols, start=start, end=end, limits=limits,
                               strategy=strategy_cfg, data_hashes=dict(hashes),
                               currency_exposure_mult=currency_exposure_mult,
+                              initial_equity=initial_equity,
                               label="holdout" if holdout else "research")
 
     def run(cfg: BacktestConfig, variant: Any, name: str) -> tuple[dict[str, Any], Any]:
@@ -222,6 +224,8 @@ def run_carry_suite(
         strategy_cfg=BaselineParams(timeframe=Timeframe.D1, version=params.version),
         strategy_info=params.model_dump(mode="json"), build=build, variants=variants,
         limits=_carry_limits(), currency_exposure_mult=3.0,
+        # ADR 0004 addendum: 10k cannot size D1 stops above the 0.01-lot minimum.
+        initial_equity=100_000.0,
         assumptions=("FRED 3-month interbank rates, month M usable from day 1 of M+2",
                      f"swap = rate differential - {params.swap_markup}% per year, daily",
                      "fixed retail spreads, 2 points slippage on entries and all exits",

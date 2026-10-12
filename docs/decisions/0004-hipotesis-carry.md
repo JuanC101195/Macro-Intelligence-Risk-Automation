@@ -36,6 +36,20 @@ Prior honesto: **moderado-bajo** para este periodo. Entre 2010 y 2021 las tasas 
 
 `|d| ≥ 0.25`, `|d| ≥ 1.00`, stop 2 × ATR, stop 4 × ATR, rebalanceo semanal (primera vela de la semana), máximo 2 posiciones.
 
+## Adenda 2026-10-12 — primera corrida inválida por defectos del simulador
+
+La primera ejecución (config `carry-v001`, 57 operaciones) **no prueba la hipótesis**: dos defectos del entorno de prueba descartaron la mayoría de las señales.
+
+1. **`volume_below_min` (220 rechazos).** Con 10 000 USD y 0.25 % de riesgo (25 USD), un stop de 3 × ATR diario da menos de 0.01 lotes. ~80 % de las señales no se pudieron ejecutar.
+2. **`tick_value_mismatch` (43 rechazos), falso positivo del gestor de riesgo.** En USDXXX el bróker convierte la pérdida al precio del stop; con stops del 2-3 % la diferencia superaba la tolerancia fija del 2 % (pensada para stops de M15).
+
+Correcciones (no cambian ninguna regla de la hipótesis):
+- Gestor de riesgo: dimensiona con la **mayor** de las dos estimaciones de pérdida por lote (la del `tick_value` y la de `order_calc_profit`), así el riesgo real nunca se subestima; la verificación cruzada pasa antes del dimensionamiento con tolerancia `2 % + distancia_stop / precio`. Sigue rechazando errores groseros (test con `tick_value` ×150).
+- Capital de simulación del carry: **100 000 USD**, para que el mínimo de 0.01 lotes no domine. Las métricas de la Puerta A son relativas (PF, drawdown %, signo de la expectancy).
+- Hallazgo práctico: con 10 000 USD no es viable operar este carry diario con 0.25 % de riesgo por operación.
+
+La segunda corrida, con el mismo `carry-v001` y las mismas vecinas, es la que cuenta.
+
 ## Criterio de éxito
 
 La Puerta A de la ADR 0002, sin cambios. Hold-out de 12 meses: **no se usa** en esta corrida. Si falla, se descarta `carry-v001`; cualquier variante nueva necesita su propia ADR escrita antes de evaluarla.

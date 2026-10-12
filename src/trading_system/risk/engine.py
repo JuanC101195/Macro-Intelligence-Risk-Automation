@@ -75,8 +75,14 @@ class DefaultRiskEngine:
         if rejections:
             return _reject(rejections)
 
+        broker_loss_per_lot = max(0.0, -self._quotes.calc_profit(
+            spec.symbol, order.side, 1.0, order.entry, order.stop))
+        rejections = self._tick_value_check(order, spec, broker_loss_per_lot)
+        if rejections:
+            return _reject(rejections)
         sizing = size_position(account.equity, self._limits.max_risk_per_trade,
-                               order.entry, order.stop, spec)
+                               order.entry, order.stop, spec,
+                               min_loss_per_lot=broker_loss_per_lot)
         if sizing.volume is None:
             return _reject([sizing.rejection or "sizing_failed"])
 
@@ -204,12 +210,22 @@ class DefaultRiskEngine:
         margin = self._quotes.calc_margin(spec.symbol, order.side, sizing.volume, order.entry)
         if margin > self._cfg.max_margin_usage * account.margin_free:
             problems.append("insufficient_margin")
-        pnl = self._quotes.calc_profit(spec.symbol, order.side, sizing.volume,
-                                       order.entry, order.stop)
-        expected = -sizing.risk_money_real
-        if abs(pnl - expected) > self._cfg.profit_check_tolerance * sizing.risk_money_real:
-            problems.append("tick_value_mismatch")
         return problems
+
+    def _tick_value_check(self, order: _Order, spec: SymbolSpec,
+                          broker_loss_per_lot: float) -> list[str]:
+        """Catch a misread tick value (x10, x100...) before sizing.
+
+        For pairs whose profit currency is not the account's (USDJPY, USDCAD...), the
+        broker converts the loss at the stop price while tick_value uses today's price,
+        so a legitimate gap of about the stop distance in percent is allowed.
+        """
+        distance = abs(order.entry - order.stop)
+        spec_loss = distance / spec.tick_size * spec.tick_value
+        tolerance = self._cfg.profit_check_tolerance + distance / min(order.entry, order.stop)
+        if broker_loss_per_lot <= 0 or abs(broker_loss_per_lot - spec_loss) > tolerance * spec_loss:
+            return ["tick_value_mismatch"]
+        return []
 
 
 def _reject(rejections: list[str]) -> RiskDecision:
