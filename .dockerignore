@@ -11,6 +11,8 @@
 research
 tests
 docs
+infra/azure
+infra/windows
 infra/docker/data
 infra/docker/crucix.env
 *.db

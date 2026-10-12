@@ -13,7 +13,7 @@ APP=/opt/itp/app
 export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$APP"
 
 mkdir -p /opt/itp
-if [ ! -d "$APP/.git" ]; then
+if [[ ! -d "$APP/.git" ]]; then
   git clone -q -b "$BRANCH" "$REPO" "$APP"
 else
   git -C "$APP" fetch -q origin
