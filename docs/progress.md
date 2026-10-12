@@ -11,6 +11,14 @@
 
 ## Registro
 
+### 2026-10-12 — Grabación macro 24/7 en Azure for Students
+
+- VM `vm-itp-macro` (Spain Central, B2ats v2, sin puertos de entrada) con Docker Compose: Crucix (commit revisado, sin puertos publicados) + grabador. Detalles y comandos en `docs/operations.md`.
+- Verificado: Crucix `healthy`, 0 reinicios, 28/29 fuentes; grabador escribiendo snapshots reales (`risk_on`, VIX 14.84).
+- Presupuesto `itp-monthly` de 10 USD/mes con avisos por correo. La suscripción no tiene tarjeta: no puede generar cobros reales.
+- Fallos encontrados y corregidos durante el despliegue: B1s sin capacidad, scripts multilínea en `az`, uid del contenedor, `safe.directory` de git, y Crucix sin heap suficiente (bucle de reinicios).
+- El PC sigue grabando en paralelo unos días como respaldo.
+
 ### 2026-10-11 — Crucix real en local
 
 - Crucix instalado en `Desktop\Crucix`, fijado al commit revisado `3db7068` (`npm ci --omit=optional`; solo `express` y sus dependencias). Licencia AGPL: se usa sin modificar y por HTTP.
