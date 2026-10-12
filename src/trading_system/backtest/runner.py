@@ -25,6 +25,7 @@ from trading_system.backtest.walk_forward import add_months, rolling_windows, wi
 from trading_system.broker.contracts import Bar
 from trading_system.broker.history import file_sha256, read_bars
 from trading_system.domain import Timeframe
+from trading_system.macro.macro_context import MacroContext
 from trading_system.risk.contracts import RiskLimits
 from trading_system.strategy.baseline import BaselineParams
 
@@ -70,6 +71,8 @@ def run_suite(
     hashes: Mapping[str, str],
     *,
     params: BaselineParams | None = None,
+    macro: Callable[[datetime], MacroContext] | None = None,
+    macro_source: str = "unknown (no history)",
     holdout: bool = False,
     neighbours: bool = True,
     progress: Callable[[str], None] = lambda _: None,
@@ -86,7 +89,7 @@ def run_suite(
 
     def run(cfg: BacktestConfig, name: str) -> tuple[dict[str, Any], Any]:
         progress(name)
-        result = Backtest(cfg, bars).run()
+        result = Backtest(cfg, bars, macro=macro).run()
         return compute(result), result
 
     base, base_result = run(base_cfg, "costs x1")
@@ -123,7 +126,7 @@ def run_suite(
         "gate_a": [asdict(c) for c in checks],
         "gate_a_passed": gates.gate_passed(checks),
         "assumptions": [
-            "macro context unknown (no history before recording started)",
+            f"macro context: {macro_source}",
             "fixed retail spreads, 2 points slippage on entries and stops, no swap",
             "breaker reset by a simulated operator at the next 17:00 New York",
             "orders fill at the next bar open; fills across data gaps are cancelled",

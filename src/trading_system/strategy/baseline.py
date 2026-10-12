@@ -54,6 +54,8 @@ class BaselineParams(BaseModel):
     macro_required: bool = False
     macro_unknown_penalty: float = Field(default=0.8, gt=0, le=1)
     macro_blocks_counter_trend: bool = True
+    # ADR 0003 "confirm" variant: LONG only in risk_on, SHORT only in risk_off.
+    macro_require_confirmation: bool = False
 
     @property
     def min_bars(self) -> int:
@@ -230,20 +232,26 @@ class _Setup:
     holds: list[str]
 
 
+def _macro_holds(side: Side, macro: MacroContext, p: BaselineParams) -> list[str]:
+    against = "risk_off" if side is Side.LONG else "risk_on"
+    supports = "risk_on" if side is Side.LONG else "risk_off"
+    if p.macro_blocks_counter_trend and macro.risk_regime == against:
+        return ["macro_contradiction"]
+    if p.macro_require_confirmation and macro.risk_regime != supports:
+        return ["macro_not_confirming"]
+    return []
+
+
 def _setup(ready: Ready, spec: SymbolSpec, macro: MacroContext, p: BaselineParams) -> _Setup:
     longs, shorts = _long_checks(ready, p), _short_checks(ready, p)
     n_long, n_short = sum(longs.values()), sum(shorts.values())
     score = round(100 * max(n_long, n_short) / len(longs))
     if all(longs.values()):
-        contradiction = p.macro_blocks_counter_trend and macro.risk_regime == "risk_off"
-        return _Setup(Side.LONG, list(longs), score,
-                      ["macro_contradiction"] if contradiction else [])
+        return _Setup(Side.LONG, list(longs), score, _macro_holds(Side.LONG, macro, p))
     if all(shorts.values()) and p.allow_short:
         if not spec.short_allowed:
             return _Setup(Side.HOLD, list(shorts), score, ["short_not_allowed"])
-        contradiction = p.macro_blocks_counter_trend and macro.risk_regime == "risk_on"
-        return _Setup(Side.SHORT, list(shorts), score,
-                      ["macro_contradiction"] if contradiction else [])
+        return _Setup(Side.SHORT, list(shorts), score, _macro_holds(Side.SHORT, macro, p))
     best = longs if n_long >= n_short else shorts
     detail = [f"{k}={'ok' if v else 'no'}" for k, v in best.items()]
     return _Setup(Side.HOLD, detail, score, ["no_setup"])

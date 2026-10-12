@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     n8n_api_key: SecretStr | None = None
     n8n_base_url: str | None = None
 
+    fred_api_key: SecretStr | None = None
     llm_api_key: SecretStr | None = None
     telegram_bot_token: SecretStr | None = None
     discord_bot_token: SecretStr | None = None
@@ -115,6 +116,7 @@ class Settings(BaseSettings):
         "mt5_password",
         "api_key",
         "n8n_api_key",
+        "fred_api_key",
         "llm_api_key",
         "telegram_bot_token",
         "discord_bot_token",
@@ -163,6 +165,7 @@ class Settings(BaseSettings):
             self.mt5_password,
             self.api_key,
             self.n8n_api_key,
+            self.fred_api_key,
             self.llm_api_key,
             self.telegram_bot_token,
             self.discord_bot_token,

@@ -11,6 +11,13 @@
 
 ## Registro
 
+### 2026-10-12 — H-MACRO-1 (ADR 0003): filtro de régimen con historia de FRED — rama `feat/fred-macro-filter`
+
+- Pre-registro (ADR 0003) y adenda de datos (spread HY solo desde 2023-10) commiteados **antes** de ejecutar; código commiteado antes de las corridas.
+- `macro/fred_history.py`: contexto macro punto-en-el-tiempo desde FRED (VIX, HY, curva) con disponibilidad D+1 22:00 UTC; `trading-system data fred`; `backtest run --macro-filter block|confirm`.
+- Resultado en H1 (15 años): **ninguna variante pasa la Puerta A**. `block` reduce las pérdidas frente a la estrategia sin filtro pero sigue negativa; `confirm` elimina ~90 % de las operaciones y lo que queda está en torno a cero (muestra insuficiente para A2). Las vecinas también fallan. Hold-out no usado.
+- Conclusión según la ADR 0003: se descarta el filtro macro sobre la familia de señales de tendencia. Presupuesto usado: 14 de 20. La historia de FRED queda disponible para hipótesis con fundamento económico propio.
+
 ### 2026-10-12 — Hipótesis: misma lógica en timeframes mayores — rama `feat/higher-timeframes`
 
 - Backtest con `--tf` (M15/H1/H4); cada timeframe es una hipótesis con versión propia (`baseline-v001-h1`, `-h4`) y su propio presupuesto de variantes. Las variantes vecinas (A9) heredan el timeframe (test añadido: antes se habrían evaluado en M15 sin aviso).

@@ -142,6 +142,19 @@ def test_risk_on_blocks_short_and_short_permissions() -> None:
     assert run(SHORT_SNAP, p=BaselineParams(allow_short=False)).side is Side.HOLD
 
 
+@pytest.mark.parametrize(
+    ("snap", "regime", "allowed"),
+    [
+        ("long", "risk_on", True), ("long", "mixed", False), ("long", "unknown", False),
+        ("short", "risk_off", True), ("short", "mixed", False), ("short", "risk_on", False),
+    ],
+)
+def test_macro_confirmation_variant(snap: str, regime: str, allowed: bool) -> None:
+    p = BaselineParams(macro_require_confirmation=True)
+    s = run(LONG_SNAP if snap == "long" else SHORT_SNAP, p=p, macro=macro(regime))
+    assert (s.side is not Side.HOLD) is allowed
+
+
 def test_all_hold_reasons_reported_together() -> None:
     s = run(tick=TICK.model_copy(update={"spread_points": 50}),
             state=MarketState(has_open_position=True, risk_blocked=True))

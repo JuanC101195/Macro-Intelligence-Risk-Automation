@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
+import httpx
 import typer
 
 from trading_system import __version__
@@ -156,6 +157,33 @@ def data_download(
     typer.echo(f"OK {path}")
 
 
+@data_app.command("fred")
+def data_fred(
+    start: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"])] = datetime(2009, 1, 1),
+    out: Annotated[Path, typer.Option(help="Output file")] = Path(
+        "research/datasets/fred_macro.json"),
+) -> None:
+    """Download VIX, high-yield spread and 10Y-2Y curve daily history from FRED."""
+    from trading_system.macro import fred_history
+
+    settings = _settings_or_exit()
+    if settings.fred_api_key is None:
+        typer.echo("FRED_API_KEY is not set in .env", err=True)
+        raise typer.Exit(code=1)
+    key = settings.fred_api_key.get_secret_value()
+    series = {}
+    for sid in fred_history.SERIES:
+        try:
+            series[sid] = fred_history.fetch_series(sid, key, start.date())
+        except (RuntimeError, httpx.HTTPError) as exc:
+            typer.echo(f"ERROR {sid}: {type(exc).__name__}: {exc}", err=True)
+            raise typer.Exit(code=1) from None
+        obs = series[sid]
+        typer.echo(f"{sid}: {len(obs)} obs {obs[0][0]} -> {obs[-1][0]}")
+    fred_history.save(series, out)
+    typer.echo(f"OK {out}")
+
+
 @backtest_app.command("run")
 def backtest_run(
     symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",
@@ -165,15 +193,35 @@ def backtest_run(
         help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
     timeframe: Annotated[Timeframe, typer.Option("--tf", help="Bar timeframe")] = Timeframe.M15,
+    macro_filter: Annotated[str, typer.Option(
+        help="none | block | confirm (ADR 0003, needs `data fred`)")] = "none",
 ) -> None:
     """Run baseline-v001 with costs x1/x1.5/x2, walk-forward and Gate A. Writes a report."""
     from trading_system.backtest import gates, report, runner
+    from trading_system.macro.fred_history import FredMacroHistory
+    from trading_system.macro.fred_history import load as load_fred
     from trading_system.strategy.baseline import BaselineParams
 
-    # Each timeframe is its own hypothesis with its own version (ADR 0002 variant budget).
+    if macro_filter not in ("none", "block", "confirm"):
+        typer.echo("--macro-filter must be none, block or confirm", err=True)
+        raise typer.Exit(code=1)
+    # Each timeframe / filter is its own hypothesis with its own version (ADR 0002 budget).
     version = "baseline-v001" if timeframe is Timeframe.M15 else (
         f"baseline-v001-{timeframe.value.lower()}")
     params = BaselineParams(timeframe=timeframe, version=version)
+    macro, macro_source = None, "unknown (no history)"
+    if macro_filter != "none":
+        fred_path = data / "fred_macro.json"
+        if not fred_path.exists():
+            typer.echo("missing FRED history: run `trading-system data fred` first", err=True)
+            raise typer.Exit(code=1)
+        macro = FredMacroHistory(load_fred(fred_path)).context_at
+        macro_source = "FRED daily history (available D+1 22:00 UTC), regime-rules-v001"
+        params = params.model_copy(update={
+            "version": f"{version}-macro-{macro_filter}",
+            "macro_required": True,
+            "macro_require_confirmation": macro_filter == "confirm",
+        })
     bars, hashes = runner.load_datasets(
         data, [s.strip().upper() for s in symbols.split(",")], timeframe)
     if holdout:
@@ -184,7 +232,8 @@ def backtest_run(
         except gates.HoldoutAlreadyUsedError as exc:
             typer.echo(f"REFUSED: {exc}", err=True)
             raise typer.Exit(code=2) from None
-    result = runner.run_suite(bars, hashes, params=params, holdout=holdout, neighbours=neighbours,
+    result = runner.run_suite(bars, hashes, params=params, macro=macro, macro_source=macro_source,
+                              holdout=holdout, neighbours=neighbours,
                               progress=lambda name: typer.echo(f"  running {name}...", err=True))
     out.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
