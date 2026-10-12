@@ -17,16 +17,17 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      # Exact versions and hashes from uv.lock; the project itself is not built or
-      # installed (tests and mypy import it from src/ via PYTHONPATH settings).
+      # Exact versions and hashes from uv.lock, prebuilt wheels only (--no-build: no
+      # package is built from source, so no setup scripts run). The project itself is
+      # not installed: tests and mypy import it from src/.
       - name: Install locked dependencies
-        run: uv sync --frozen --extra dev --no-install-project
+        run: uv sync --frozen --extra dev --no-install-project --no-build
       - name: Ruff
-        run: uv run --no-sync ruff check .
+        run: uv run --no-sync --no-build ruff check .
       - name: Mypy
-        run: uv run --no-sync mypy
+        run: uv run --no-sync --no-build mypy
       - name: Tests
-        run: uv run --no-sync pytest
+        run: uv run --no-sync --no-build pytest
 
   secrets-scan:
     runs-on: ubuntu-latest
