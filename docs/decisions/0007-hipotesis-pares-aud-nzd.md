@@ -68,3 +68,7 @@ Puntos que el texto anterior no fijaba; ninguno cambia las reglas de entrada, sa
 ## Criterio de éxito
 
 Puerta A de la ADR 0002 sin cambios (salvo la definición de operación de arriba). Si falla, se descarta `pairs-v001`, no se prueban otros pares de divisas elegidos a posteriori y se pasa a la siguiente idea acordada (regímenes con mezclas gaussianas) o a la Fase 7.
+
+## Resultado (2026-10-12)
+
+`pairs-v001` **no pasa la Puerta A** (negativa con costes ×1, muestra insuficiente para la A2, las 7 vecinas negativas). Se descarta. La mayoría de las salidas son por el stop de protección de una pata, no por el diferencial; detalle en `docs/progress.md` y en el reporte local. Hold-out no usado.
