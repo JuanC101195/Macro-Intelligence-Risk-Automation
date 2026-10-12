@@ -77,7 +77,8 @@ class TestEntries:
         assert s.stop_loss == round(s.stop_loss, 5)
 
     def test_signal_is_deterministic(self) -> None:
-        assert run() == run()
+        first, second = run(), run()
+        assert first == second
 
     def test_confidence_scales_with_adx(self) -> None:
         weak, strong = run(replace(LONG_SNAP, adx=20.0)), run(replace(LONG_SNAP, adx=45.0))

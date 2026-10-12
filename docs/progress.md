@@ -11,6 +11,11 @@
 
 ## Registro
 
+### 2026-10-12 — Quality gate de SonarQube en `main`
+
+- Estado del repo: PRs #1–#6 mergeados, CI en verde; el quality gate de SonarQube fallaba por confiabilidad C (un test comparaba una expresión consigo misma) y 11 hallazgos menores.
+- Corregido en `fix/sonar-quality-gate`: `uv.lock` como fuente única de dependencias (CI con `uv sync --frozen`, sin construir el proyecto; imagen Docker desde `uv export` con hashes); acciones de GitHub fijadas por SHA completo; `classify()` y `adx()` divididos en funciones pequeñas (mismos resultados, tests de referencia en verde); tests de excepciones más precisos.
+
 ### 2026-10-12 — Fase 4 (estrategia base `baseline-v001`) — rama `feat/phase-4-strategy`
 
 Hecho:

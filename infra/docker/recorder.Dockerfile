@@ -4,9 +4,10 @@
 # - dependencies come from a lock file with pinned versions AND hashes (--require-hashes);
 # - only prebuilt wheels are accepted (--only-binary :all:), so no setup scripts run;
 # - our own code is copied, not built/installed, and run via PYTHONPATH.
-# Regenerate the lock after changing dependencies in pyproject.toml:
-#   python -m piptools compile --generate-hashes --strip-extras \
-#     --output-file infra/docker/requirements.lock pyproject.toml
+# uv.lock is the single source of truth. After changing dependencies in pyproject.toml:
+#   uv lock
+#   uv export --frozen --no-emit-project --no-dev --format requirements-txt \
+#     --output-file infra/docker/requirements.lock
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

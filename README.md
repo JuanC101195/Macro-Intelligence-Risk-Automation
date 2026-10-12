@@ -22,6 +22,15 @@ pytest tests/safety -v           # reglas de seguridad
 ruff check . ; mypy
 ```
 
+### Dependencias bloqueadas
+
+`uv.lock` fija versiones y hashes de todo (lo usa el CI). Al cambiar dependencias en `pyproject.toml`:
+
+```powershell
+.\.venv\Scripts\uv.exe lock
+.\.venv\Scripts\uv.exe export --frozen --no-emit-project --no-dev --format requirements-txt --output-file infra/docker/requirements.lock
+```
+
 ## Documentación
 
 | Documento | Contenido |

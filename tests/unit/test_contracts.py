@@ -91,8 +91,9 @@ class TestOrderIntent:
             _intent(intent_id="not-an-id")
 
     def test_naive_datetime_rejected(self) -> None:
+        naive = datetime(2026, 10, 12, 14, 0)  # noqa: DTZ001
         with pytest.raises(ValidationError):
-            _intent(signal_bar_time=datetime(2026, 10, 12, 14, 0))  # noqa: DTZ001
+            _intent(signal_bar_time=naive)
 
     def test_intent_id_is_deterministic(self) -> None:
         a = make_intent_id("v1", "EURUSD", Timeframe.M15, T0, Side.LONG)

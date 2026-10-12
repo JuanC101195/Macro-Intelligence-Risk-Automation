@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import pytest
+from pydantic import ValidationError
 
 from trading_system.config import ConfigurationError, Settings
 from trading_system.domain import TradingMode
@@ -96,5 +97,5 @@ def test_risk_must_be_positive(make_settings: Callable[..., Settings], value: fl
 
 def test_settings_are_immutable(make_settings: Callable[..., Settings]) -> None:
     s = make_settings()
-    with pytest.raises(Exception):  # noqa: B017 - pydantic raises ValidationError on frozen models
+    with pytest.raises(ValidationError, match="frozen"):
         s.trading_mode = TradingMode.LIVE  # type: ignore[misc]
