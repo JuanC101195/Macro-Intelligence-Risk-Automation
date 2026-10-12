@@ -16,10 +16,13 @@ services:
     environment:
       PORT: "3117"
       REFRESH_INTERVAL_MINUTES: "15"
+      # A full sweep needs ~400 MB of JS heap; Node's default under a 512m cgroup is lower
+      # and crashed with "heap out of memory" in a restart loop. Host has 2 GB swap.
+      NODE_OPTIONS: "--max-old-space-size=768"
     volumes:
       - crucix-runs:/app/runs
     restart: unless-stopped
-    mem_limit: 512m
+    mem_limit: 1g
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
