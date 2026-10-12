@@ -11,6 +11,17 @@
 
 ## Registro
 
+### 2026-10-11 — Conexión real a MT5 y descarga de histórico
+
+- Cuenta **demo** MetaQuotes-Demo, USD, 10 000, 1:100, login `****9960`. Conectada con la **contraseña de inversor**: `trade_allowed=False`, MT5 rechazaría cualquier orden. La contraseña principal no está en `.env` hasta la Fase 11.
+- `trading-system mt5 check` en verde. Diferencia horaria del servidor: **UTC+3 (180 min)**, observada en vivo y configurada.
+- **Q3 resuelta:** el servidor tiene ~4.1 años de M15 (desde septiembre de 2022) en los tres pares, aun con el límite de barras en "Ilimitado". Con 12 meses de hold-out quedan ~3.1 años para investigación: cumple A1 (≥ 3 años) con poco margen.
+- Descargados `EURUSD`, `GBPUSD`, `USDJPY` M15 (~100 k velas cada uno) en `research/datasets/` con manifiesto y sha256 (local, no se sube).
+- Calidad de datos:
+  - Huecos: feriados de fin de año (esperado) y **un corte de 12 h el 2024-07-02 en los tres pares**. El backtest debe tolerar huecos sin operar a través de ellos.
+  - **Spreads de MetaQuotes-Demo irreales**: EURUSD con spread 0 en el 51 % de las velas (mediana 0); GBPUSD mediana 4 puntos, USDJPY 3. **El backtest no usará el spread histórico de esta fuente**: usará un spread fijo realista + comisión (`CostModel.spread_mode="fixed"`), y la sensibilidad ×1.5/×2 de la ADR 0002.
+- Bug corregido: `N8N_BASE_URL` vacío impedía arrancar con una copia de `.env.example`. Test añadido.
+
 ### 2026-10-11 — Fase 3 (Crucix) — rama `feat/phase-3-crucix`
 
 Hecho:

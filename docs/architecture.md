@@ -441,8 +441,8 @@ Nota: el paquete `MetaTrader5` solo funciona en Windows y necesita el terminal i
 | # | Pregunta | Cuándo se resuelve |
 |---|----------|--------------------|
 | Q1 | Formato real de `/api/data` de Crucix y qué campos existen | Fase 3 |
-| Q2 | Broker de la cuenta demo (comisiones, spreads, divisa de la cuenta) | Fase 2 |
-| Q3 | Profundidad del histórico M15 disponible en el broker (¿≥ 3 años?) | Fase 2 |
+| Q2 | Broker de la cuenta demo (comisiones, spreads, divisa de la cuenta) | Parcial: MetaQuotes-Demo, USD. Sus spreads no son realistas; el broker regulado definitivo se elige antes de la Fase 11 |
+| Q3 | Profundidad del histórico M15 disponible en el broker (¿≥ 3 años?) | **Resuelta:** ~4.1 años (desde 2022-09) |
 | Q4 | Cómo clasificar risk-on/risk-off por par (USDJPY reacciona distinto) | Fase 4 |
 | Q5 | Proveedor del VPS | Fase 11 |
 | Q6 | ¿El broker demo conserva el `comment` de las órdenes? | Fase 2 |
