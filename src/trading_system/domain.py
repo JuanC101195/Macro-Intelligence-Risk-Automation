@@ -20,6 +20,16 @@ class Timeframe(StrEnum):
     D1 = "D1"
 
 
+TIMEFRAME_MINUTES: dict[Timeframe, int] = {
+    Timeframe.M1: 1,
+    Timeframe.M5: 5,
+    Timeframe.M15: 15,
+    Timeframe.H1: 60,
+    Timeframe.H4: 240,
+    Timeframe.D1: 1440,
+}
+
+
 class Side(StrEnum):
     LONG = "LONG"
     SHORT = "SHORT"

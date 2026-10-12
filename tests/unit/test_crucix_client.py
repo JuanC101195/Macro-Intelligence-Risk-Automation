@@ -79,6 +79,20 @@ class TestNormalize:
         assert ctx.source_health == 0.0
         assert ctx.risk_regime == "unknown"
 
+    def test_real_captured_payload(self) -> None:
+        """Real Crucix response (commit 3db7068), captured 2026-10-12 01:20 UTC."""
+        path = Path(__file__).resolve().parents[1] / "fixtures" / "crucix_real_20261012.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        captured_at = datetime(2026, 10, 12, 1, 25, tzinfo=UTC)
+        ctx = normalize(payload, captured_at, MAX_AGE)
+        assert ctx.risk_regime == "risk_on"
+        assert ctx.vix == pytest.approx(14.84)
+        assert ctx.yield_curve == pytest.approx(0.44)
+        assert ctx.credit_spread == pytest.approx(3.15)
+        assert ctx.oil_change_pct is not None
+        assert ctx.source_health == pytest.approx(27 / 29)
+        assert ctx.data_stale is False
+
     def test_raw_subset_keeps_only_relevant_parts(self) -> None:
         subset = raw_subset(make_payload(FRESH))
         assert set(subset) >= {"meta", "markets", "fred", "tg_urgent_count", "gdelt_counts"}
@@ -176,6 +190,33 @@ class TestRecorder:
         assert first["raw"]["fred"][0]["id"] == "T10Y2Y"
         contexts = recorder.load_contexts(path)
         assert contexts[0].vix == 14.8
+
+    def test_wait_for_data_until_crucix_ready(self) -> None:
+        responses = iter([503, 503, 200])
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            status = next(responses)
+            return httpx.Response(status, json=make_payload(FRESH) if status == 200 else {})
+
+        client = _client(handler, retries=0)
+        sleeps: list[float] = []
+        assert recorder.wait_for_data(client, timedelta(minutes=5), sleep=sleeps.append)
+        assert len(sleeps) == 2
+
+    def test_wait_for_data_times_out(self) -> None:
+        client = _client(lambda r: httpx.Response(503), retries=0)
+        assert not recorder.wait_for_data(client, timedelta(0), sleep=lambda s: None)
+
+    def test_single_instance_lock(self, tmp_path: Path) -> None:
+        with (
+            recorder.single_instance(tmp_path),
+            pytest.raises(recorder.AlreadyRunningError),
+            recorder.single_instance(tmp_path),
+        ):
+            pass
+        # Released after exit: can be taken again.
+        with recorder.single_instance(tmp_path):
+            pass
 
     def test_records_unknown_when_down(self, tmp_path: Path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:

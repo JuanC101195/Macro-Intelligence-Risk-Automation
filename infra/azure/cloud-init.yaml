@@ -1,0 +1,17 @@
+#cloud-config
+# Ubuntu 24.04 host for Crucix + macro recorder. Docker from Ubuntu's archive.
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - unattended-upgrades
+runcmd:
+  - systemctl enable --now docker
+  - usermod -aG docker azureuser
+  - mkdir -p /opt/itp
+  - chown azureuser:azureuser /opt/itp
+  # Swap: 1 GB RAM is tight while building images.
+  - fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab

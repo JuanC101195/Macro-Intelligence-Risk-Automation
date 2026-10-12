@@ -20,16 +20,7 @@ from pydantic import SecretStr
 
 from trading_system.broker.contracts import AccountInfo, Bar, Position, SymbolSpec, Tick
 from trading_system.config import Settings
-from trading_system.domain import Timeframe
-
-TIMEFRAME_MINUTES: dict[Timeframe, int] = {
-    Timeframe.M1: 1,
-    Timeframe.M5: 5,
-    Timeframe.M15: 15,
-    Timeframe.H1: 60,
-    Timeframe.H4: 240,
-    Timeframe.D1: 1440,
-}
+from trading_system.domain import TIMEFRAME_MINUTES, Timeframe
 
 # MT5 constants, duplicated so behaviour does not depend on the fake defining them.
 _ACCOUNT_TRADE_MODE: dict[int, Literal["demo", "contest", "real"]] = {
@@ -62,7 +53,8 @@ _MAX_OFFSET = timedelta(hours=14)
 
 def fx_market_open(now_utc: datetime) -> bool:
     """Conservative FX weekly session: Sunday 22:00 UTC to Friday 21:00 UTC."""
-    weekday, hour = now_utc.weekday(), now_utc.hour  # Monday = 0
+    # weekday(): Monday is 0, Sunday is 6
+    weekday, hour = now_utc.weekday(), now_utc.hour
     if weekday == 5:  # Saturday
         return False
     if weekday == 6:  # Sunday

@@ -1,0 +1,52 @@
+# Crucix + macro snapshot recorder, for an always-on Linux host.
+#
+#   docker compose -f infra/docker/docker-compose.macro.yml up -d --build
+#
+# Crucix publishes NO ports: only the recorder reaches it, over the compose network.
+# Its API keys live in crucix.env next to this file on the host (never in git).
+name: itp-macro
+
+services:
+  crucix:
+    # Built from the exact commit that was reviewed (docs/progress.md, Phase 3).
+    build:
+      context: https://github.com/calesthio/Crucix.git#3db7068817e0c815df353fa0f19657c85142789d
+    env_file:
+      - crucix.env
+    environment:
+      PORT: "3117"
+      REFRESH_INTERVAL_MINUTES: "15"
+      # A full sweep needs ~400 MB of JS heap; Node's default under a 512m cgroup is lower
+      # and crashed with "heap out of memory" in a restart loop. Host has 2 GB swap.
+      NODE_OPTIONS: "--max-old-space-size=768"
+    volumes:
+      - crucix-runs:/app/runs
+    restart: unless-stopped
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  recorder:
+    build:
+      context: ../..
+      dockerfile: infra/docker/recorder.Dockerfile
+    environment:
+      CRUCIX_BASE_URL: "http://crucix:3117"
+      CRUCIX_ENABLED: "true"
+      TRADING_MODE: "paper"
+      LOG_LEVEL: "INFO"
+    depends_on:
+      - crucix
+    # Same uid as the host user (azureuser = 1000) so the bind-mounted files are its own.
+    user: "1000:1000"
+    volumes:
+      - ./data/macro_snapshots:/data/macro_snapshots
+    restart: unless-stopped
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  crucix-runs:

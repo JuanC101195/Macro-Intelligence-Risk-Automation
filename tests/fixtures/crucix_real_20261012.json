@@ -1,0 +1,428 @@
+{
+ "meta": {
+  "version": "2.0.0",
+  "timestamp": "2026-10-12T01:20:33.530Z",
+  "totalDurationMs": 30059,
+  "sourcesQueried": 29,
+  "sourcesOk": 27,
+  "sourcesFailed": 2
+ },
+ "markets": {
+  "indexes": [
+   {
+    "symbol": "^GSPC",
+    "name": "S&P 500",
+    "price": 7811.54,
+    "change": 88.82,
+    "changePct": 1.15,
+    "history": []
+   },
+   {
+    "symbol": "^IXIC",
+    "name": "Nasdaq Composite",
+    "price": 27366.17,
+    "change": 175.31,
+    "changePct": 0.64,
+    "history": []
+   },
+   {
+    "symbol": "^DJI",
+    "name": "Dow Jones",
+    "price": 51654.95,
+    "change": 477.99,
+    "changePct": 0.93,
+    "history": []
+   },
+   {
+    "symbol": "^RUT",
+    "name": "Russell 2000",
+    "price": 2806.98,
+    "change": -25.92,
+    "changePct": -0.91,
+    "history": []
+   }
+  ],
+  "rates": [
+   {
+    "symbol": "TLT",
+    "name": "20Y+ Treasury",
+    "price": 77.98,
+    "change": 0.5,
+    "changePct": 0.65
+   },
+   {
+    "symbol": "HYG",
+    "name": "High Yield Corp",
+    "price": 77.23,
+    "change": 0.32,
+    "changePct": 0.42
+   },
+   {
+    "symbol": "LQD",
+    "name": "IG Corporate",
+    "price": 102.41,
+    "change": 0.58,
+    "changePct": 0.57
+   }
+  ],
+  "commodities": [
+   {
+    "symbol": "GC=F",
+    "name": "Gold",
+    "price": 4230.3,
+    "change": 43.2,
+    "changePct": 1.03,
+    "history": []
+   },
+   {
+    "symbol": "SI=F",
+    "name": "Silver",
+    "price": 61.48,
+    "change": 0.31,
+    "changePct": 0.5,
+    "history": []
+   },
+   {
+    "symbol": "CL=F",
+    "name": "WTI Crude",
+    "price": 90.03,
+    "change": 0.59,
+    "changePct": 0.66,
+    "history": []
+   },
+   {
+    "symbol": "BZ=F",
+    "name": "Brent Crude",
+    "price": 102.85,
+    "change": 2.27,
+    "changePct": 2.26,
+    "history": []
+   },
+   {
+    "symbol": "NG=F",
+    "name": "Natural Gas",
+    "price": 3.16,
+    "change": 0.04,
+    "changePct": 1.41,
+    "history": []
+   }
+  ],
+  "crypto": [
+   {
+    "symbol": "BTC-USD",
+    "name": "Bitcoin",
+    "price": 83837.34,
+    "change": 2161,
+    "changePct": 2.65
+   },
+   {
+    "symbol": "ETH-USD",
+    "name": "Ethereum",
+    "price": 2542.17,
+    "change": 70.26,
+    "changePct": 2.84
+   }
+  ],
+  "vix": {
+   "value": 14.84,
+   "change": -0.68,
+   "changePct": -4.38
+  },
+  "timestamp": "2026-10-12T01:20:05.424Z"
+ },
+ "metals": {
+  "gold": 4230.3,
+  "goldChange": 43.2,
+  "goldChangePct": 1.03,
+  "goldRecent": [
+   4187.1,
+   4140.7,
+   4157,
+   4216.3,
+   4230.3
+  ],
+  "silver": 61.48,
+  "silverChange": 0.31,
+  "silverChangePct": 0.5,
+  "silverRecent": [
+   61.17,
+   59.9,
+   59.06,
+   60.67,
+   61.47
+  ]
+ },
+ "fred": [
+  {
+   "id": "DFF",
+   "label": "Fed Funds Rate",
+   "value": 3.88,
+   "date": "2026-10-08",
+   "recent": [
+    3.88,
+    3.88,
+    3.88,
+    3.88,
+    3.88
+   ]
+  },
+  {
+   "id": "DGS2",
+   "label": "2-Year Treasury Yield",
+   "value": 4.75,
+   "date": "2026-10-08",
+   "recent": [
+    4.75,
+    4.77,
+    4.79,
+    4.84,
+    4.83
+   ]
+  },
+  {
+   "id": "DGS10",
+   "label": "10-Year Treasury Yield",
+   "value": 5.22,
+   "date": "2026-10-08",
+   "recent": [
+    5.22,
+    5.28,
+    5.27,
+    5.31,
+    5.28
+   ]
+  },
+  {
+   "id": "DGS30",
+   "label": "30-Year Treasury Yield",
+   "value": 5.6,
+   "date": "2026-10-08",
+   "recent": [
+    5.6,
+    5.67,
+    5.64,
+    5.66,
+    5.63
+   ]
+  },
+  {
+   "id": "T10Y2Y",
+   "label": "10Y-2Y Spread (Yield Curve)",
+   "value": 0.44,
+   "date": "2026-10-09",
+   "recent": [
+    0.44,
+    0.47,
+    0.51,
+    0.48,
+    0.47
+   ]
+  },
+  {
+   "id": "T10Y3M",
+   "label": "10Y-3M Spread",
+   "value": 0.99,
+   "date": "2026-10-09",
+   "recent": [
+    0.99,
+    0.99,
+    1.06,
+    1.06,
+    1.09
+   ]
+  },
+  {
+   "id": "CPIAUCSL",
+   "label": "CPI All Items",
+   "value": 334.131,
+   "date": "2026-08-01",
+   "recent": [
+    334.131,
+    332.813
+   ]
+  },
+  {
+   "id": "CPILFESL",
+   "label": "Core CPI (ex Food & Energy)",
+   "value": 337.765,
+   "date": "2026-08-01",
+   "recent": [
+    337.765,
+    336.789
+   ]
+  },
+  {
+   "id": "PCEPI",
+   "label": "PCE Price Index",
+   "value": 131.579,
+   "date": "2026-08-01",
+   "recent": [
+    131.579,
+    131.172
+   ]
+  },
+  {
+   "id": "MICH",
+   "label": "Michigan Inflation Expectations",
+   "value": 4,
+   "date": "2026-08-01",
+   "recent": [
+    4,
+    4.2
+   ]
+  },
+  {
+   "id": "UNRATE",
+   "label": "Unemployment Rate",
+   "value": 4.2,
+   "date": "2026-09-01",
+   "recent": [
+    4.2,
+    4.1,
+    4.1
+   ]
+  },
+  {
+   "id": "PAYEMS",
+   "label": "Nonfarm Payrolls",
+   "value": 159044,
+   "date": "2026-09-01",
+   "recent": [
+    159044,
+    159015,
+    158882
+   ]
+  },
+  {
+   "id": "ICSA",
+   "label": "Initial Jobless Claims",
+   "value": 197000,
+   "date": "2026-10-03",
+   "recent": [
+    197000,
+    199000,
+    198000,
+    198000,
+    207000
+   ]
+  },
+  {
+   "id": "M2SL",
+   "label": "M2 Money Supply",
+   "value": 23342.8,
+   "date": "2026-08-01",
+   "recent": [
+    23342.8,
+    23217.9
+   ]
+  },
+  {
+   "id": "WALCL",
+   "label": "Fed Balance Sheet Total Assets",
+   "value": 6747560,
+   "date": "2026-10-07",
+   "recent": [
+    6747560,
+    6743031,
+    6747704,
+    6746548,
+    6740619
+   ]
+  },
+  {
+   "id": "VIXCLS",
+   "label": "VIX (Fear Index)",
+   "value": 15.41,
+   "date": "2026-10-08",
+   "recent": [
+    15.41,
+    15.08,
+    15.01,
+    15.52,
+    15.31
+   ]
+  },
+  {
+   "id": "BAMLH0A0HYM2",
+   "label": "High Yield Spread (Credit Stress)",
+   "value": 3.15,
+   "date": "2026-10-08",
+   "recent": [
+    3.15,
+    3.09,
+    3.03,
+    3.12,
+    3.1
+   ]
+  },
+  {
+   "id": "DCOILWTICO",
+   "label": "WTI Crude Oil",
+   "value": 96.24,
+   "date": "2026-10-06",
+   "recent": [
+    96.24,
+    96.13,
+    97.89,
+    99.77,
+    97.18
+   ]
+  },
+  {
+   "id": "MORTGAGE30US",
+   "label": "30-Year Mortgage Rate",
+   "value": 7.4,
+   "date": "2026-10-08",
+   "recent": [
+    7.4,
+    7.28,
+    7.03,
+    6.95,
+    6.76
+   ]
+  },
+  {
+   "id": "DTWEXBGS",
+   "label": "USD Trade Weighted Index",
+   "value": 121.3848,
+   "date": "2026-10-02",
+   "recent": [
+    121.3848,
+    121.7882,
+    120.9693,
+    121.0296,
+    120.6958
+   ]
+  }
+ ],
+ "energy": {
+  "wti": 90.03,
+  "brent": 102.85,
+  "natgas": 3.16,
+  "wtiRecent": [
+   89.44,
+   88.28,
+   91.49,
+   91.85,
+   90.03
+  ],
+  "signals": []
+ },
+ "acled": {
+  "totalEvents": 0,
+  "totalFatalities": 0,
+  "byRegion": {},
+  "byType": {},
+  "deadliestEvents": []
+ },
+ "tg_urgent_count": 0,
+ "gdelt_counts": {
+  "totalArticles": 0,
+  "conflicts": 0,
+  "economy": 0,
+  "crisis": 0
+ },
+ "tg": {
+  "urgent": []
+ }
+}

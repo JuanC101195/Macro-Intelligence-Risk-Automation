@@ -175,18 +175,27 @@ def macro_record(
     interval_minutes: Annotated[int, typer.Option(min=1)] = 15,
     once: Annotated[bool, typer.Option(help="Record a single snapshot and exit")] = False,
     out: Annotated[Path, typer.Option(help="Output directory")] = recorder.DEFAULT_DIR,
+    wait_minutes: Annotated[
+        int, typer.Option(min=0, help="Wait up to N minutes for Crucix data before the first one")
+    ] = 0,
 ) -> None:
     """Append Crucix snapshots to monthly JSONL files. This builds the macro history."""
     settings = _settings_or_exit()
     client = _crucix(settings)
     try:
-        while True:
-            ctx = recorder.record_once(client, out)
-            typer.echo(f"{datetime.now(UTC):%Y-%m-%d %H:%M:%S}Z {ctx.risk_regime} "
-                       f"conf={ctx.confidence} stale={ctx.data_stale}")
-            if once:
-                break
-            time.sleep(interval_minutes * 60)
+        with recorder.single_instance(out):
+            if not recorder.wait_for_data(client, timedelta(minutes=wait_minutes)):
+                typer.echo("Crucix data not available yet; recording anyway", err=True)
+            while True:
+                ctx = recorder.record_once(client, out)
+                typer.echo(f"{datetime.now(UTC):%Y-%m-%d %H:%M:%S}Z {ctx.risk_regime} "
+                           f"conf={ctx.confidence} stale={ctx.data_stale}")
+                if once:
+                    break
+                time.sleep(interval_minutes * 60)
+    except recorder.AlreadyRunningError as exc:
+        typer.echo(f"NOT STARTED: {exc}", err=True)
+        raise typer.Exit(code=3) from None
     except KeyboardInterrupt:
         typer.echo("stopped")
     finally:
