@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from trading_system.macro import regime_classifier
@@ -53,6 +54,22 @@ def single_instance(out_dir: Path) -> Iterator[None]:
         fh.close()
 
 
+def wait_for_data(
+    client: CrucixClient,
+    timeout: timedelta,
+    poll: timedelta = timedelta(seconds=15),
+    sleep: Callable[[float], None] = time.sleep,
+) -> bool:
+    """Poll until Crucix serves /api/data. Avoids an empty first snapshot after a restart."""
+    deadline = time.monotonic() + timeout.total_seconds()
+    while True:
+        if client.fetch_raw() is not None:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        sleep(poll.total_seconds())
+
+
 def record_once(client: CrucixClient, out_dir: Path = DEFAULT_DIR) -> MacroContext:
     payload = client.fetch_raw()
     now = datetime.now(UTC)
@@ -87,4 +104,5 @@ __all__ = [
     "normalize",
     "record_once",
     "single_instance",
+    "wait_for_data",
 ]

@@ -191,6 +191,22 @@ class TestRecorder:
         contexts = recorder.load_contexts(path)
         assert contexts[0].vix == 14.8
 
+    def test_wait_for_data_until_crucix_ready(self) -> None:
+        responses = iter([503, 503, 200])
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            status = next(responses)
+            return httpx.Response(status, json=make_payload(FRESH) if status == 200 else {})
+
+        client = _client(handler, retries=0)
+        sleeps: list[float] = []
+        assert recorder.wait_for_data(client, timedelta(minutes=5), sleep=sleeps.append)
+        assert len(sleeps) == 2
+
+    def test_wait_for_data_times_out(self) -> None:
+        client = _client(lambda r: httpx.Response(503), retries=0)
+        assert not recorder.wait_for_data(client, timedelta(0), sleep=lambda s: None)
+
     def test_single_instance_lock(self, tmp_path: Path) -> None:
         with (
             recorder.single_instance(tmp_path),
