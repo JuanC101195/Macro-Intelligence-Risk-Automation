@@ -172,6 +172,8 @@ class OrderGateway(Protocol):       # solo lo usa DemoExecutor
 
 Implementaciones: `Mt5Client` (real), `FakeMt5` (tests), `HistoricalDataSource` (backtest).
 
+**Hora del servidor.** MT5 entrega timestamps en hora local del servidor, no en UTC. La diferencia se **configura** (`MT5_SERVER_UTC_OFFSET_MINUTES`); no se deduce sola. Un tick viejo cuya antigüedad se acerca a un múltiplo de 30 min parece fresco y daría una diferencia falsa pero creíble (lo detectó un test). Con el mercado abierto, los ticks frescos solo se usan para **verificar** el valor configurado: si no coincide (por ejemplo, el broker cambió al horario de verano), el cliente se detiene. Sin valor configurado, no lee datos (fail-closed).
+
 `Bar` está en precio **bid**. Para la entrada se usa el ask y para disparar SL/TP en un SHORT se usa `bid + spread` (detalle en `risk-policy.md` §2).
 
 ### 5.3 Crucix / macro (`macro/`)

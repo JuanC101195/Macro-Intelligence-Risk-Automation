@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     mt5_password: SecretStr | None = None
     mt5_server: str | None = None
     mt5_path: str | None = None
+    mt5_timeout_ms: int = Field(default=10_000, ge=1000)
+    # Server time minus UTC, in minutes (e.g. 180 for UTC+3). Required to read MT5 data;
+    # `trading-system mt5 check` prints the observed value. Mismatches stop the client.
+    mt5_server_utc_offset_minutes: int | None = Field(default=None, ge=-720, le=840)
 
     symbols: Annotated[tuple[str, ...], NoDecode] = ("EURUSD", "GBPUSD", "USDJPY")
     default_symbol: str = "EURUSD"
@@ -101,10 +105,13 @@ class Settings(BaseSettings):
         "telegram_bot_token",
         "discord_bot_token",
         "discord_webhook_url",
+        "mt5_server",
+        "mt5_path",
+        "mt5_server_utc_offset_minutes",
         mode="before",
     )
     @classmethod
-    def _empty_secret_is_none(cls, value: Any) -> Any:
+    def _empty_is_none(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
             return None
         return value
