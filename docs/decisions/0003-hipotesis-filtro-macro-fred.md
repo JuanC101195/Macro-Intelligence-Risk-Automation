@@ -39,6 +39,14 @@ Prior honesto: **bajo**. Un filtro solo elimina operaciones; si las pérdidas es
 - Presupuesto: 2 variantes principales + 12 vecinas = 14 de las 20 de esta hipótesis.
 - Hold-out de 12 meses: **no se usa**.
 
+## Adenda 2026-10-12 — desviación de datos (registrada antes de ejecutar)
+
+Al descargar, FRED solo entrega `BAMLH0A0HYM2` desde **2023-10-10** (ICE limitó la serie a los últimos 3 años); `VIXCLS` y `T10Y2Y` sí tienen historia desde 2009.
+
+- No se cambia el clasificador ni sus umbrales. Entre 2010 y 2023-10 `credit_spread` es `None` y el régimen sale de VIX (nivel y cambio) y de la curva (solo refuerza risk_off). `source_health` = 2/3 en ese tramo (por encima del mínimo 0.5).
+- No se sustituye por otra serie de crédito (p. ej. `BAA10Y`): tiene otra escala y exigiría umbrales nuevos, es decir, otra hipótesis.
+- Consecuencia: en la mayor parte del periodo de investigación el filtro es esencialmente un filtro de VIX. Se reporta así.
+
 ## Criterio de éxito
 
 La Puerta A de la ADR 0002, sin cambios. Si ninguna variante pasa:
