@@ -45,13 +45,9 @@ az group delete -n rg-itp-macro
 - El contenedor del grabador debe usar el mismo uid que el dueño de la carpeta montada (1000).
 - Crucix necesita ~400 MB de heap de JS por barrido: con `mem_limit: 512m` entraba en bucle de "heap out of memory". Ahora 1 GB y `--max-old-space-size=768`.
 
-## Grabación en el PC (respaldo provisional)
+## Grabación en el PC (desactivada 2026-10-12)
 
-Tareas `ITP-Crucix` e `ITP-MacroRecorder` (Programador de tareas, al iniciar sesión). Scripts y explicación en `infra/windows/`. Graban en `research/macro_snapshots/` del PC, en paralelo con Azure.
-
-```powershell
-.\infra\windows\register-tasks.ps1 -Unregister   # quitar cuando Azure lleve unos días estable
-```
+Azure quedó como único grabador: las tareas `ITP-Crucix` e `ITP-MacroRecorder` se eliminaron (eran frágiles: se caían al detener procesos desde la terminal de Claude). Los snapshots ya grabados en `research/macro_snapshots/` se conservan. Para reactivarlas: `.\infra\windows\register-tasks.ps1`.
 
 ## Pendiente
 
