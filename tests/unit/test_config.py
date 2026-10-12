@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
-from trading_system.config import ConfigurationError, Settings
+from trading_system.config import ConfigurationError, Settings, load_settings
+
+
+def test_env_example_loads_as_is() -> None:
+    """A fresh copy of .env.example must be a valid, safe configuration."""
+    example = Path(__file__).resolve().parents[2] / ".env.example"
+    s = load_settings(_env_file=example)
+    assert s.trading_mode.value == "paper"
+    assert s.n8n_base_url is None
+    assert s.mt5_login is None
 
 
 def test_defaults_match_risk_policy(make_settings: Callable[..., Settings]) -> None:

@@ -122,6 +122,7 @@ class Settings(BaseSettings):
         "mt5_server",
         "mt5_path",
         "mt5_server_utc_offset_minutes",
+        "n8n_base_url",
         mode="before",
     )
     @classmethod
