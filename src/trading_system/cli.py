@@ -22,6 +22,7 @@ from trading_system.macro.crucix_client import CrucixClient
 DATASETS = Path("research/datasets")
 REPORTS = Path("research/reports")
 EXPERIMENTS = Path("research/experiments.jsonl")
+RATES_FILE = "fred_rates.json"
 
 app = typer.Typer(help="Intelligence Trading Platform", no_args_is_help=True)
 config_app = typer.Typer(help="Configuration commands", no_args_is_help=True)
@@ -190,7 +191,7 @@ def data_fred(
 @data_app.command("rates")
 def data_rates(
     start: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"])] = datetime(2005, 1, 1),
-    out: Annotated[Path, typer.Option(help="Output file")] = DATASETS / "fred_rates.json",
+    out: Annotated[Path, typer.Option(help="Output file")] = DATASETS / RATES_FILE,
 ) -> None:
     """Download monthly 3-month interbank rates (FRED/OECD) for the 8 carry currencies."""
     from trading_system.macro import fred_history, rates
@@ -229,6 +230,17 @@ def _write_report(result: dict[str, Any], out: Path) -> Path:
     return stem
 
 
+def _load_rates(data: Path) -> Any:
+    from trading_system.macro.fred_history import load as load_fred
+    from trading_system.macro.rates import RateHistory
+
+    rates_path = data / RATES_FILE
+    if not rates_path.exists():
+        typer.echo("missing rates: run `trading-system data rates` first", err=True)
+        raise typer.Exit(code=1)
+    return RateHistory(load_fred(rates_path))
+
+
 @backtest_app.command("carry")
 def backtest_carry(
     symbols: Annotated[str, typer.Option(help="Comma separated USD pairs")] = (
@@ -239,17 +251,32 @@ def backtest_carry(
 ) -> None:
     """Run carry-v001 (ADR 0004) on D1 with costs, swap, walk-forward and Gate A."""
     from trading_system.backtest import runner
-    from trading_system.macro.fred_history import load as load_fred
-    from trading_system.macro.rates import RateHistory
 
-    rates_path = data / "fred_rates.json"
-    if not rates_path.exists():
-        typer.echo("missing rates: run `trading-system data rates` first", err=True)
-        raise typer.Exit(code=1)
+
     bars, hashes = runner.load_datasets(
         data, [s.strip().upper() for s in symbols.split(",")], Timeframe.D1)
     result = runner.run_carry_suite(
-        bars, hashes, RateHistory(load_fred(rates_path)), neighbours=neighbours,
+        bars, hashes, _load_rates(data), neighbours=neighbours,
+        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    _write_report(result, out)
+
+
+@backtest_app.command("breakout")
+def backtest_breakout(
+    symbols: Annotated[str, typer.Option(help="Comma separated instruments")] = (
+        "XAUUSD,XAGUSD,US500,US30,EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF"),
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+) -> None:
+    """Run breakout-v001 (ADR 0006) on D1, cent-equivalent capital, costs and financing."""
+    from trading_system.backtest import runner
+
+
+    bars, hashes = runner.load_datasets(
+        data, [s.strip().upper() for s in symbols.split(",")], Timeframe.D1)
+    result = runner.run_breakout_suite(
+        bars, hashes, _load_rates(data), neighbours=neighbours,
         progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 

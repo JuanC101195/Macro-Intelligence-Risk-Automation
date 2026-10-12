@@ -34,9 +34,13 @@ def trading_day_start(now: datetime) -> datetime:
 
 
 def currency_legs(symbol: str, side: Side) -> dict[str, int]:
-    """LONG EURUSD = long EUR (+1), short USD (-1). Six-letter FX symbols only."""
+    """LONG EURUSD = long EUR (+1), short USD (-1).
+
+    Only six-letter currency/metal symbols have legs; for anything else (indices)
+    an empty mapping is returned and exposure is bounded by max_open_positions.
+    """
     if len(symbol) != 6 or not symbol.isalpha():
-        raise ValueError(f"not a six-letter FX symbol: {symbol}")
+        return {}
     sign = 1 if side == "buy" else -1
     return {symbol[:3].upper(): sign, symbol[3:].upper(): -sign}
 
