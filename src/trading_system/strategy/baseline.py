@@ -129,6 +129,38 @@ def snapshot(bars: Sequence[Bar], p: BaselineParams) -> IndicatorSnapshot:
     )
 
 
+def snapshot_series(bars: Sequence[Bar], p: BaselineParams) -> list[IndicatorSnapshot | None]:
+    """Snapshots for every bar, computing each indicator series once (for backtests).
+
+    Indicators are causal (tests/unit/test_indicators.py::test_no_look_ahead), so the
+    snapshot at bar i only depends on bars 0..i. Bars before `min_bars` get None, the
+    same warm-up the live path enforces.
+    """
+    closes = [b.close for b in bars]
+    highs = [b.high for b in bars]
+    lows = [b.low for b in bars]
+    ema_fast, ema_slow = ind.ema(closes, p.ema_fast), ind.ema(closes, p.ema_slow)
+    rsi = ind.rsi(closes, p.rsi_period)
+    _, _, hist = ind.macd(closes, p.macd_fast, p.macd_slow, p.macd_signal)
+    atr = ind.atr(highs, lows, closes, p.atr_period)
+    adx, _, _ = ind.adx(highs, lows, closes, p.adx_period)
+
+    out: list[IndicatorSnapshot | None] = []
+    for i in range(len(bars)):
+        if i + 1 < p.min_bars:
+            out.append(None)
+            continue
+        window = [v for v in rsi[i - p.rsi_lookback:i] if v is not None]
+        full = len(window) == p.rsi_lookback
+        out.append(IndicatorSnapshot(
+            close=closes[i], ema_fast=ema_fast[i], ema_slow=ema_slow[i], rsi=rsi[i],
+            rsi_prev=rsi[i - 1], rsi_window_min=min(window) if full else None,
+            rsi_window_max=max(window) if full else None, macd_hist=hist[i], atr=atr[i],
+            adx=adx[i],
+        ))
+    return out
+
+
 def _long_checks(s: Ready, p: BaselineParams) -> dict[str, bool]:
     return {
         "ema_trend_up": s.ema_fast > s.ema_slow,

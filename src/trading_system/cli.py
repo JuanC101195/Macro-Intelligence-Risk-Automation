@@ -23,6 +23,8 @@ config_app = typer.Typer(help="Configuration commands", no_args_is_help=True)
 mt5_app = typer.Typer(help="MetaTrader 5 (read-only)", no_args_is_help=True)
 data_app = typer.Typer(help="Historical data", no_args_is_help=True)
 macro_app = typer.Typer(help="Crucix macro context", no_args_is_help=True)
+backtest_app = typer.Typer(help="Backtests and ADR 0002 gates", no_args_is_help=True)
+app.add_typer(backtest_app, name="backtest")
 app.add_typer(config_app, name="config")
 app.add_typer(mt5_app, name="mt5")
 app.add_typer(data_app, name="data")
@@ -152,6 +154,41 @@ def data_download(
     finally:
         client.shutdown()
     typer.echo(f"OK {path}")
+
+
+@backtest_app.command("run")
+def backtest_run(
+    symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = Path("research/datasets"),
+    out: Annotated[Path, typer.Option(help="Reports directory")] = Path("research/reports"),
+    holdout: Annotated[bool, typer.Option(
+        help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+) -> None:
+    """Run baseline-v001 with costs x1/x1.5/x2, walk-forward and Gate A. Writes a report."""
+    from trading_system.backtest import gates, report, runner
+
+    bars, hashes = runner.load_datasets(data, [s.strip().upper() for s in symbols.split(",")])
+    if holdout:
+        if not typer.confirm("The hold-out can be evaluated only once. Continue?"):
+            raise typer.Exit(code=1)
+        try:
+            gates.claim_holdout(out / "holdout_used.json", "baseline-v001")
+        except gates.HoldoutAlreadyUsedError as exc:
+            typer.echo(f"REFUSED: {exc}", err=True)
+            raise typer.Exit(code=2) from None
+    result = runner.run_suite(bars, hashes, holdout=holdout, neighbours=neighbours,
+                              progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    out.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    stem = out / f"{stamp}-{result['label']}"
+    stem.with_suffix(".json").write_text(json.dumps(result, indent=1, default=str),
+                                         encoding="utf-8")
+    stem.with_suffix(".md").write_text(report.render(result), encoding="utf-8")
+    runner.log_experiment(result, Path("research/experiments.jsonl"))
+    for c in result["gate_a"]:
+        typer.echo(f"{c['id']:>4} {c['status']:<8} {c['criterion']}: {c['value']}")
+    typer.echo(f"Gate A passed: {result['gate_a_passed']}  ->  {stem.with_suffix('.md')}")
 
 
 @macro_app.command("check")

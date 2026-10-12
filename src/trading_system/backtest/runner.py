@@ -1,0 +1,141 @@
+"""Research run of baseline-v001 against ADR 0002 Gate A.
+
+- Data: latest Parquet per symbol in research/datasets (sha256 recorded).
+- The last HOLDOUT_MONTHS are excluded from research runs by code (ADR 0002 rule 2).
+  `holdout=True` evaluates ONLY that period, once, and records the claim.
+- Suite: costs x1 (base), x1.5, x2; 6-month walk-forward windows; neighbouring
+  parameter variants for stability (A9), fixed before any result was seen.
+- Every run is appended to research/experiments.jsonl (ADR 0002 rule 3).
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from trading_system.backtest import gates
+from trading_system.backtest.costs import CostModel
+from trading_system.backtest.engine import Backtest, BacktestConfig
+from trading_system.backtest.metrics import compute
+from trading_system.backtest.walk_forward import add_months, rolling_windows, window_results
+from trading_system.broker.contracts import Bar
+from trading_system.broker.history import file_sha256, read_bars
+from trading_system.risk.contracts import RiskLimits
+from trading_system.strategy.baseline import BaselineParams
+
+WINDOW_MONTHS = 6
+
+# A9 neighbours of baseline-v001, fixed in code before the first research run.
+NEIGHBOURS: dict[str, dict[str, Any]] = {
+    "adx_min=18": {"adx_min": 18.0},
+    "adx_min=22": {"adx_min": 22.0},
+    "sl_atr=1.25": {"sl_atr_mult": 1.25},
+    "sl_atr=1.75": {"sl_atr_mult": 1.75},
+    "rsi=38/62": {"rsi_pullback_long": 38.0, "rsi_pullback_short": 62.0},
+    "rsi=42/58": {"rsi_pullback_long": 42.0, "rsi_pullback_short": 58.0},
+}
+
+
+def load_datasets(directory: Path, symbols: Sequence[str]
+                  ) -> tuple[dict[str, list[Bar]], dict[str, str]]:
+    bars: dict[str, list[Bar]] = {}
+    hashes: dict[str, str] = {}
+    for sym in symbols:
+        files = sorted(directory.glob(f"{sym}_M15_*.parquet"))
+        if not files:
+            raise FileNotFoundError(f"no M15 dataset for {sym} in {directory}")
+        bars[sym] = read_bars(files[-1])
+        hashes[sym] = file_sha256(files[-1])
+    return bars, hashes
+
+
+def holdout_start(bars: Mapping[str, Sequence[Bar]]) -> datetime:
+    last = min(b[-1].time for b in bars.values())
+    return add_months(last, -gates.HOLDOUT_MONTHS)
+
+
+def _limits() -> RiskLimits:
+    return RiskLimits(max_risk_per_trade=0.0025, max_daily_loss=0.02, max_open_positions=1,
+                      max_consecutive_losses=3, max_spread_points=30, max_slippage_points=10,
+                      max_trades_per_day=5)
+
+
+def run_suite(
+    bars: Mapping[str, Sequence[Bar]],
+    hashes: Mapping[str, str],
+    *,
+    holdout: bool = False,
+    neighbours: bool = True,
+    progress: Callable[[str], None] = lambda _: None,
+) -> dict[str, Any]:
+    symbols = tuple(sorted(bars))
+    cut = holdout_start(bars)
+    first = max(b[0].time for b in bars.values())
+    end = add_months(min(b[-1].time for b in bars.values()), 1) if holdout else cut
+    start = cut if holdout else first
+    base_cfg = BacktestConfig(symbols=symbols, start=start, end=end, limits=_limits(),
+                              data_hashes=dict(hashes),
+                              label="holdout" if holdout else "research")
+
+    def run(cfg: BacktestConfig, name: str) -> tuple[dict[str, Any], Any]:
+        progress(name)
+        result = Backtest(cfg, bars).run()
+        return compute(result), result
+
+    base, base_result = run(base_cfg, "costs x1")
+    costs15, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(1.5)}), "costs x1.5")
+    costs20, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(2.0)}), "costs x2")
+    windows = window_results(base_result.trades, rolling_windows(start, end, WINDOW_MONTHS))
+
+    variant_exp: dict[str, float | None] = {}
+    if neighbours and not holdout:
+        for name, change in NEIGHBOURS.items():
+            params = BaselineParams(**change)
+            m, _ = run(base_cfg.model_copy(update={"strategy": params}), name)
+            variant_exp[name] = m["expectancy"]
+
+    history_years = (cut - first).days / 365.25
+    checks = gates.gate_a(history_years, base, costs15, windows,
+                          neighbors=variant_exp or None,
+                          holdout=base if holdout else None)
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "label": base_cfg.label,
+        "config_fingerprint": base_cfg.fingerprint(),
+        "trades_digest": base_result.digest(),
+        "period": {"start": start.isoformat(), "end": end.isoformat(),
+                   "holdout_start": cut.isoformat(), "history_years": history_years},
+        "symbols": list(symbols),
+        "data_hashes": dict(hashes),
+        "costs": CostModel().model_dump(),
+        "strategy": BaselineParams().model_dump(mode="json"),
+        "metrics": {"costs_x1": base, "costs_x1.5": costs15, "costs_x2": costs20},
+        "walk_forward": windows,
+        "neighbours_expectancy": variant_exp,
+        "gate_a": [asdict(c) for c in checks],
+        "gate_a_passed": gates.gate_passed(checks),
+        "assumptions": [
+            "macro context unknown (no history before recording started)",
+            "fixed retail spreads, 2 points slippage on entries and stops, no swap",
+            "breaker reset by a simulated operator at the next 17:00 New York",
+            "orders fill at the next bar open; fills across data gaps are cancelled",
+        ],
+    }
+
+
+def log_experiment(report: Mapping[str, Any], log_path: Path) -> None:
+    m = report["metrics"]["costs_x1"]
+    line = {
+        "at": report["generated_at"], "label": report["label"],
+        "config": report["config_fingerprint"], "digest": report["trades_digest"],
+        "strategy": report["strategy"]["version"], "trades": m["trades"],
+        "net": m["net_profit"], "pf": m["profit_factor"], "expectancy": m["expectancy"],
+        "gate_a_passed": report["gate_a_passed"],
+    }
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(line, default=str) + "\n")
