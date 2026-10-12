@@ -24,6 +24,7 @@ from trading_system.strategy import indicators as ind
 from trading_system.strategy.signals import MarketState, Signal
 
 BrokerSide = Literal["buy", "sell"]
+TARGET_FLOOR = 0.10  # short targets never below 10 % of the entry (ADR 0006 addendum)
 
 
 class BreakoutParams(BaseModel):
@@ -104,12 +105,16 @@ class BreakoutStrategy:
                           **common)
         entry = tick.ask if side is Side.LONG else tick.bid
         sign = 1 if side is Side.LONG else -1
+        target = entry + sign * self.params.target_atr * lv.atr
+        if side is Side.SHORT:
+            # The contractual target is non-binding; keep it a valid (positive) price.
+            target = max(target, entry * TARGET_FLOOR)
         return Signal(
             side=side, confidence=0.5,
             reasons=(f"close_beyond_{self.params.entry_window}d_channel",),
             entry_ref=entry,
             stop_loss=round(entry - sign * self.params.stop_atr * lv.atr, spec.digits),
-            take_profit=round(entry + sign * self.params.target_atr * lv.atr, spec.digits),
+            take_profit=round(target, spec.digits),
             **common,
         )
 

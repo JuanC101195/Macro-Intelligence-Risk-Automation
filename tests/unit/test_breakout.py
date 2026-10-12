@@ -85,6 +85,18 @@ class TestBreakout:
         assert not s.exit_check("XAUUSD", bars[8], "sell")
         assert s.exit_check("XAUUSD", bars[9], "sell")  # 101.5 > max(high of prev 3) = 98
 
+    def test_short_target_stays_a_positive_price(self) -> None:
+        # Price ~10 with ATR ~2: 20 x ATR below the entry would be negative.
+        bars = [Bar(time=T0 + DAY * i, open=c, high=c + 1, low=c - 1, close=c, tick_volume=1,
+                    spread_points=0) for i, c in enumerate([12, 13, 12, 13, 12, 13, 9.5])]
+        s = BreakoutStrategy(BreakoutParams(entry_window=5, exit_window=3, atr_period=3),
+                             {"XAGUSD": bars})
+        tick = Tick(time=bars[-1].time + DAY, bid=9.5, ask=9.53, spread_points=30)
+        sig = s.decide(None, bars[-1], tick, symbol_spec("XAGUSD", 9.5),
+                       MacroContext.unknown(tick.time), FREE, None, "XAGUSD")
+        assert sig.side is Side.SHORT
+        assert sig.take_profit == pytest.approx(0.95)
+
     def test_not_ready_before_window(self) -> None:
         s, bars = self._strategy([100, 101, 102])
         assert self._decide(s, bars[-1]).hold_reasons == ("no_breakout",)

@@ -44,6 +44,8 @@ Entrada 40 / 70 velas; salida 15 / 30 velas; stop 1.5 / 2.5 × ATR.
 
 Al descargar, `USTEC` solo tiene historia D1 desde **2022-07** en MetaQuotes-Demo. Como el periodo de investigación empieza cuando todos los instrumentos tienen datos, incluirlo recortaría la prueba a ~3 años. Se **excluye USTEC**; el universo queda en 11 instrumentos (XAUUSD, XAGUSD, US500, US30 y los 7 pares FX), con datos comunes desde 2012-08. Ninguna regla cambia.
 
+Segunda adenda (antes de la primera corrida completa): el take-profit contractual de un SHORT (entrada − 20 × ATR) podía ser un precio negativo en instrumentos con ATR alto respecto al precio (p. ej. XAGUSD), lo que abortaba la simulación. Se fija un piso del 10 % del precio de entrada. Sigue sin ser vinculante; ninguna regla de entrada, salida o stop cambia.
+
 ## Criterio de éxito
 
 Puerta A de la ADR 0002 sin cambios. Si falla, se descarta `breakout-v001` y la línea de investigación se pausa hasta tener más historia macro (Crucix) o una idea con fundamento distinto, priorizando la Fase 7.
