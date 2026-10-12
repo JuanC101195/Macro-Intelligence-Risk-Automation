@@ -78,6 +78,22 @@ def test_metatrader5_only_in_mt5_client() -> None:
     assert not offenders, f"MetaTrader5 imported outside broker/mt5_client.py: {offenders}"
 
 
+def test_only_the_risk_engine_builds_order_intents() -> None:
+    """Single path to an order: Signal -> RiskEngine -> OrderIntent -> Executor."""
+    allowed = SRC / "risk" / "engine.py"
+    builders = []
+    for path in _python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            if name in {"OrderIntent", "model_construct"} and path != allowed:
+                builders.append(f"{path.relative_to(SRC)}:{node.lineno}")
+    assert not builders, f"OrderIntent built outside risk/engine.py: {builders}"
+
+
 def test_no_order_send_anywhere_yet() -> None:
     # Relaxed in Phase 11, and then only for execution/demo_executor.py.
     offenders = [

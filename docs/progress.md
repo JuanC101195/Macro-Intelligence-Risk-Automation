@@ -11,6 +11,23 @@
 
 ## Registro
 
+### 2026-10-12 — Fase 5 (riesgo) — rama `feat/phase-5-risk`
+
+Hecho:
+- `risk/position_sizing.py`: fórmula de `risk-policy.md` §2; siempre redondea hacia abajo; rechaza bajo el mínimo del broker (nunca redondea hacia arriba); tope en el máximo. Ejemplos EURUSD y USDJPY de la política como tests (0.12 lotes, 24 USD) + 2 000 casos aleatorios: el riesgo real nunca supera el permitido.
+- `risk/circuit_breaker.py`: estado en JSON con escritura atómica; sobrevive reinicios; archivo corrupto ⇒ arranca **abierto**; conserva la primera causa; reset solo manual con operador y motivo; kill switch; historial auditable.
+- `risk/exposure.py`: día de trading desde las 17:00 de Nueva York con DST; patas por divisa; riesgo hasta el SL de una posición.
+- `risk/engine.py` (`DefaultRiskEngine`): **único** constructor de `OrderIntent` (test AST en `tests/safety`). Controles: breaker, cuenta demo, símbolo operable, short permitido, spread, posiciones/operaciones/pérdidas consecutivas, pérdida diaria actual; entrada desde ask/bid real, precio no pasado del SL/TP, deriva de entrada ≤ 50 %, distancia mínima de stops; tamaño; **pérdida diaria en el peor caso** (realizada + riesgo hasta SL de lo abierto + lo nuevo); exposición por divisa en la misma dirección; margen ≤ 50 % del libre; verificación cruzada con `order_calc_profit` (detecta `tick_value` mal interpretado).
+- Disparan el breaker: cuenta no demo, pérdida diaria alcanzada, máximo de pérdidas consecutivas, posición abierta sin SL.
+- 280 tests en verde; ruff y mypy limpios.
+
+Criterios de aceptación de la Fase 5:
+- [x] El volumen nunca redondea hacia arriba
+- [x] Sin SL ⇒ rechazo (y posición abierta sin SL dispara el breaker)
+- [x] Límites diarios (actual y peor caso)
+- [x] El breaker sobrevive a un reinicio y falla cerrado ante estado inconsistente
+- [x] Ningún otro módulo construye `OrderIntent`
+
 ### 2026-10-12 — Quality gate de SonarQube en `main`
 
 - Estado del repo: PRs #1–#6 mergeados, CI en verde; el quality gate de SonarQube fallaba por confiabilidad C (un test comparaba una expresión consigo misma) y 11 hallazgos menores.
