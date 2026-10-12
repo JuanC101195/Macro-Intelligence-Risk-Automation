@@ -11,6 +11,14 @@
 
 ## Registro
 
+### 2026-10-11 — Crucix real en local
+
+- Crucix instalado en `Desktop\Crucix`, fijado al commit revisado `3db7068` (`npm ci --omit=optional`; solo `express` y sus dependencias). Licencia AGPL: se usa sin modificar y por HTTP.
+- Escucha en todas las interfaces (`app.listen(port)` sin host): se bloquea con el firewall de Windows; nuestro cliente usa `127.0.0.1`.
+- Primer barrido: 27/29 fuentes OK en ~30 s. `trading-system macro check` contra datos reales: `risk_on`, conf 0.62, VIX 14.84, curva +0.44, HY 3.15, salud 0.93.
+- Tarea 3.1 hecha: respuesta real guardada como `tests/fixtures/crucix_real_20261012.json` (subconjunto, sin historiales) con test.
+- `conflict_events` = 0 porque ACLED requiere cuenta propia; no es señal útil hasta configurarla.
+
 ### 2026-10-11 — Conexión real a MT5 y descarga de histórico
 
 - Cuenta **demo** MetaQuotes-Demo, USD, 10 000, 1:100, login `****9960`. Conectada con la **contraseña de inversor**: `trade_allowed=False`, MT5 rechazaría cualquier orden. La contraseña principal no está en `.env` hasta la Fase 11.
