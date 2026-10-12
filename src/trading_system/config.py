@@ -8,6 +8,7 @@ Any dangerous or ambiguous combination raises at startup: the system never
 from __future__ import annotations
 
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -64,7 +65,7 @@ class Settings(BaseSettings):
     max_spread_points: int = Field(default=30, ge=1)
     max_slippage_points: int = Field(default=10, ge=0)
 
-    crucix_base_url: str = "http://localhost:3117"
+    crucix_base_url: str = "http://127.0.0.1:3117"
     crucix_enabled: bool = True
     macro_required: bool = False
     macro_max_age_minutes: int = Field(default=30, ge=1)
@@ -91,6 +92,19 @@ class Settings(BaseSettings):
             return tuple(s.strip().upper() for s in value.split(",") if s.strip())
         return value
 
+    @field_validator("crucix_base_url", "n8n_base_url")
+    @classmethod
+    def _http_url(cls, value: str | None) -> str | None:
+        # Only plain http(s) base URLs; no credentials, query strings or other schemes.
+        if value is None:
+            return value
+        parsed = urlparse(value)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError("must be an http(s) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("must not contain credentials, query or fragment")
+        return value
+
     @field_validator("default_symbol", mode="before")
     @classmethod
     def _upper_symbol(cls, value: Any) -> Any:
@@ -108,6 +122,7 @@ class Settings(BaseSettings):
         "mt5_server",
         "mt5_path",
         "mt5_server_utc_offset_minutes",
+        "n8n_base_url",
         mode="before",
     )
     @classmethod

@@ -24,6 +24,7 @@ config/tuned/
 *.tuned.yaml
 research/reports/*
 !research/reports/.gitkeep
+research/macro_snapshots/
 
 # Data and artifacts
 *.db
