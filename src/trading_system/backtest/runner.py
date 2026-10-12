@@ -20,6 +20,7 @@ from typing import Any
 from trading_system.backtest import gates
 from trading_system.backtest.costs import CostModel
 from trading_system.backtest.engine import Backtest, BacktestConfig
+from trading_system.backtest.financing import make_financing
 from trading_system.backtest.metrics import compute
 from trading_system.backtest.walk_forward import add_months, rolling_windows, window_results
 from trading_system.broker.contracts import Bar
@@ -29,6 +30,7 @@ from trading_system.macro.macro_context import MacroContext
 from trading_system.macro.rates import RateHistory
 from trading_system.risk.contracts import RiskLimits
 from trading_system.strategy.baseline import BaselineParams
+from trading_system.strategy.breakout import BreakoutParams, BreakoutStrategy
 from trading_system.strategy.carry import CarryParams, CarryStrategy
 
 WINDOW_MONTHS = 6
@@ -231,6 +233,58 @@ def run_carry_suite(
                      "fixed retail spreads, 2 points slippage on entries and all exits",
                      *_COMMON_ASSUMPTIONS),
         holdout=holdout, neighbours=neighbours, progress=progress,
+    )
+
+
+BREAKOUT_NEIGHBOURS: dict[str, dict[str, Any]] = {
+    "entry=40": {"entry_window": 40},
+    "entry=70": {"entry_window": 70},
+    "exit=15": {"exit_window": 15},
+    "exit=30": {"exit_window": 30},
+    "stop_atr=1.5": {"stop_atr": 1.5},
+    "stop_atr=2.5": {"stop_atr": 2.5},
+}
+
+
+def _breakout_limits() -> RiskLimits:
+    # ADR 0006: 3 positions, spread limit off (fixed spreads of very different scale),
+    # 10 trades/day, 5 consecutive losses.
+    return RiskLimits(max_risk_per_trade=0.0025, max_daily_loss=0.02, max_open_positions=3,
+                      max_consecutive_losses=5, max_spread_points=1_000_000,
+                      max_slippage_points=1_000_000, max_trades_per_day=10)
+
+
+def run_breakout_suite(
+    bars: Mapping[str, Sequence[Bar]],
+    hashes: Mapping[str, str],
+    rates: RateHistory,
+    *,
+    params: BreakoutParams | None = None,
+    neighbours: bool = True,
+    progress: Callable[[str], None] = lambda _: None,
+) -> dict[str, Any]:
+    """breakout-v001 (ADR 0006) on a cent-equivalent account (ADR 0005)."""
+    params = params or BreakoutParams()
+    financing = make_financing(rates)
+
+    def build(cfg: BacktestConfig, variant: BreakoutParams | None) -> Backtest:
+        strategy = BreakoutStrategy(variant or params, bars)
+        return Backtest(cfg, bars, decider=strategy.decide, exit_check=strategy.exit_check,
+                        financing=financing)
+
+    variants = {n: params.model_copy(update=c) for n, c in BREAKOUT_NEIGHBOURS.items()}
+    return evaluate_suite(
+        bars, hashes,
+        strategy_cfg=BaselineParams(timeframe=Timeframe.D1, version=params.version),
+        strategy_info=params.model_dump(mode="json"), build=build, variants=variants,
+        limits=_breakout_limits(), initial_equity=17_500.0,
+        assumptions=("capital 17,500 = cent-account equivalent of ~700,000 COP (ADR 0005)",
+                     "financing: FX rate differential - 1%; metals/indices long pays USD "
+                     "rate + 1%, short pays 1%",
+                     "fixed spreads and slippage per instrument (ADR 0006)",
+                     "currency exposure checked only for 6-letter symbols, at 1x risk",
+                     *_COMMON_ASSUMPTIONS),
+        neighbours=neighbours, progress=progress,
     )
 
 

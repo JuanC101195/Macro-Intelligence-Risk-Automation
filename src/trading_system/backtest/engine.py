@@ -28,6 +28,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from trading_system.backtest import instruments
 from trading_system.backtest.costs import CostModel
 from trading_system.backtest.fills import Exit, ExitReason, check_exit, entry_price
 from trading_system.broker.contracts import AccountInfo, Bar, Position, SymbolSpec, Tick
@@ -102,46 +103,50 @@ class BacktestResult:
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
-def _check_usd_pair(symbol: str) -> None:
-    # USD account: only XXXUSD (profit already in USD) and USDXXX (profit converted at
-    # the pair's own price). Crosses would need a third rate to convert.
-    if "USD" not in (symbol[:3], symbol[3:]):
-        raise ValueError(f"only USD pairs are supported in backtests, got {symbol}")
+def _converts_at_price(symbol: str) -> bool:
+    """USD account: profit in the quote currency must be converted (USDXXX pairs)."""
+    i = instruments.info(symbol)
+    if i.profit_currency == "USD":
+        return False
+    if i.base == "USD":
+        return True
+    # Crosses (EURGBP...) would need a third rate to convert.
+    raise ValueError(f"cannot convert {symbol} profit ({i.profit_currency}) to USD")
 
 
 def point_size(symbol: str) -> float:
-    return 1e-3 if symbol.endswith("JPY") else 1e-5
+    return instruments.info(symbol).point
 
 
 def symbol_spec(symbol: str, price: float) -> SymbolSpec:
     """Spec for a USD account; for USDXXX the tick value is converted at the current price."""
-    _check_usd_pair(symbol)
-    tick = point_size(symbol)
-    quote_is_usd = symbol.endswith("USD")
+    i = instruments.info(symbol)
+    tick_value = i.point * i.contract_size
+    if _converts_at_price(symbol):
+        tick_value /= price
     return SymbolSpec(
-        symbol=symbol, digits=3 if symbol.endswith("JPY") else 5, point=tick, tick_size=tick,
-        tick_value=tick * CONTRACT if quote_is_usd else tick * CONTRACT / price,
-        contract_size=CONTRACT, volume_min=0.01, volume_max=100.0, volume_step=0.01,
-        stops_level_points=0, freeze_level_points=0, currency_base=symbol[:3],
-        currency_profit=symbol[3:], currency_margin=symbol[:3], trade_allowed=True,
-        short_allowed=True,
+        symbol=symbol, digits=i.digits, point=i.point, tick_size=i.point,
+        tick_value=tick_value, contract_size=i.contract_size, volume_min=i.volume_min,
+        volume_max=i.volume_max, volume_step=i.volume_step, stops_level_points=0,
+        freeze_level_points=0, currency_base=i.base, currency_profit=i.profit_currency,
+        currency_margin=i.base, trade_allowed=True, short_allowed=True,
     )
 
 
 def pnl_money(symbol: str, side: BrokerSide, volume: float, entry: float, exit_: float) -> float:
     """P&L in USD. USDXXX profits are in XXX and converted at the exit price."""
-    _check_usd_pair(symbol)
     sign = 1 if side == "buy" else -1
-    raw = sign * (exit_ - entry) * volume * CONTRACT
-    return raw if symbol.endswith("USD") else raw / exit_
+    raw = sign * (exit_ - entry) * volume * instruments.info(symbol).contract_size
+    return raw / exit_ if _converts_at_price(symbol) else raw
 
 
 def notional_usd(symbol: str, volume: float, price: float) -> float:
-    return volume * CONTRACT * (1.0 if symbol.startswith("USD") else price)
+    i = instruments.info(symbol)
+    return volume * i.contract_size * (1.0 if i.base == "USD" else price)
 
 
 class BacktestQuotes:
-    """order_calc_* equivalents for a USD account at 1:100."""
+    """order_calc_* equivalents for a USD account (leverage per instrument class)."""
 
     def calc_profit(self, symbol: str, side: BrokerSide, volume: float,
                     price_open: float, price_close: float) -> float:
@@ -150,8 +155,8 @@ class BacktestQuotes:
     def calc_margin(self, symbol: str, side: BrokerSide, volume: float, price: float) -> float:
         if side not in ("buy", "sell"):
             raise ValueError(f"invalid side {side!r}")
-        # Margin is symmetric for buys and sells on these pairs.
-        return notional_usd(symbol, volume, price) / LEVERAGE
+        # Margin is symmetric for buys and sells.
+        return notional_usd(symbol, volume, price) / instruments.info(symbol).leverage
 
 
 class InMemoryBreaker:
@@ -305,7 +310,7 @@ class Backtest:
             return
         point = point_size(sym)
         spread = self.cfg.costs.spread(sym) * point
-        slip = self.cfg.costs.slippage() * point
+        slip = self.cfg.costs.slippage(sym) * point
         price = entry_price(pending.intent.side, bar.open, spread, slip)
         self.book.open[sym] = _Open(pending.intent, pending.signal_time, bar.time, price)
         self.book.trades_today += 1
@@ -321,7 +326,7 @@ class Backtest:
         if hit is None:
             return
         if hit.reason != "take_profit":  # stops are market orders: they slip
-            slip = self.cfg.costs.slippage() * point
+            slip = self.cfg.costs.slippage(sym) * point
             sign = -1 if pos.intent.side == "buy" else 1
             hit = Exit(hit.price + sign * slip, hit.reason)
         self._close(sym, hit, bar.time + self.tf)
@@ -346,7 +351,7 @@ class Backtest:
         if not self.exit_check(sym, bar, pos.intent.side):
             return
         point = point_size(sym)
-        slip = self.cfg.costs.slippage() * point
+        slip = self.cfg.costs.slippage(sym) * point
         if pos.intent.side == "buy":  # sell at the bid
             price = bar.close - slip
         else:  # buy back at the ask
