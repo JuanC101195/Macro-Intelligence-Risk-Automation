@@ -11,6 +11,24 @@
 
 ## Registro
 
+### 2026-10-12 — Fase 6 (backtesting) — rama `feat/phase-6-backtest`
+
+Hecho:
+- `backtest/engine.py`: motor por eventos multi-símbolo en orden cronológico (los límites de riesgo son de cartera). Mismo camino que en vivo: `decide()` de la estrategia → `DefaultRiskEngine` → `OrderIntent`. Ejecución en la apertura de la vela siguiente; órdenes pendientes cuentan para el límite de posiciones; no se ejecuta a través de huecos de datos.
+- `backtest/fills.py`: SL antes que TP si la vela toca ambos; gap a través del stop sale en la apertura; SHORT sale al ask (bid + spread); stops con slippage, TP sin mejora.
+- `backtest/costs.py`: spread fijo minorista por símbolo (no el de MetaQuotes-Demo), slippage, comisión; multiplicador para ×1.5 / ×2.
+- `backtest/metrics.py`: todas las métricas de `CLAUDE.md` §12. `walk_forward.py`: ventanas de 6 meses. `gates.py`: **Puerta A (A1–A10) automática** con los umbrales de la ADR 0002; **hold-out de 12 meses bloqueado por código** y de un solo uso.
+- `trading-system backtest run`: corre costos ×1/×1.5/×2, walk-forward y 6 variantes vecinas (A9, fijadas antes de ver resultados); escribe reporte Markdown/JSON en `research/reports/` y registra el experimento en `research/experiments.jsonl` (ambos locales, no se suben: ADR 0001 #14).
+- Tests de mecánica con precios calculados a mano (entrada, costos, SL primero, gaps, ask de los SHORT, cancelación por huecos, límite de cartera, reproducibilidad); 317 tests en verde.
+
+Primera corrida de investigación (`baseline-v001`, 3 pares, ~3 años sin el hold-out): **no pasa la Puerta A**. El resultado es coherente internamente (no hay indicios de bug) y robusto a las variantes vecinas: la hipótesis no tiene ventaja. Detalle en el reporte local. El hold-out **no** se usó.
+
+Criterios de aceptación de la Fase 6:
+- [x] Mismo config + mismos datos ⇒ mismo resultado (digest)
+- [x] Sin look-ahead (ejecución en t+1; indicadores causales)
+- [x] Resultados siempre con costos
+- [x] No se declara rentabilidad
+
 ### 2026-10-12 — Fase 5 (riesgo) — rama `feat/phase-5-risk`
 
 Hecho:

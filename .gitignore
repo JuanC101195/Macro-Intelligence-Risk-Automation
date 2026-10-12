@@ -25,6 +25,7 @@ config/tuned/
 research/reports/*
 !research/reports/.gitkeep
 research/macro_snapshots/
+research/experiments.jsonl
 .recorder.lock
 
 # Data and artifacts
