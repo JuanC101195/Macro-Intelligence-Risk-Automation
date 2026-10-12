@@ -164,20 +164,27 @@ def backtest_run(
     holdout: Annotated[bool, typer.Option(
         help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    timeframe: Annotated[Timeframe, typer.Option("--tf", help="Bar timeframe")] = Timeframe.M15,
 ) -> None:
     """Run baseline-v001 with costs x1/x1.5/x2, walk-forward and Gate A. Writes a report."""
     from trading_system.backtest import gates, report, runner
+    from trading_system.strategy.baseline import BaselineParams
 
-    bars, hashes = runner.load_datasets(data, [s.strip().upper() for s in symbols.split(",")])
+    # Each timeframe is its own hypothesis with its own version (ADR 0002 variant budget).
+    version = "baseline-v001" if timeframe is Timeframe.M15 else (
+        f"baseline-v001-{timeframe.value.lower()}")
+    params = BaselineParams(timeframe=timeframe, version=version)
+    bars, hashes = runner.load_datasets(
+        data, [s.strip().upper() for s in symbols.split(",")], timeframe)
     if holdout:
         if not typer.confirm("The hold-out can be evaluated only once. Continue?"):
             raise typer.Exit(code=1)
         try:
-            gates.claim_holdout(out / "holdout_used.json", "baseline-v001")
+            gates.claim_holdout(out / "holdout_used.json", version)
         except gates.HoldoutAlreadyUsedError as exc:
             typer.echo(f"REFUSED: {exc}", err=True)
             raise typer.Exit(code=2) from None
-    result = runner.run_suite(bars, hashes, holdout=holdout, neighbours=neighbours,
+    result = runner.run_suite(bars, hashes, params=params, holdout=holdout, neighbours=neighbours,
                               progress=lambda name: typer.echo(f"  running {name}...", err=True))
     out.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
