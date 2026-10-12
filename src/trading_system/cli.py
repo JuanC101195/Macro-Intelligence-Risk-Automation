@@ -19,6 +19,10 @@ from trading_system.domain import Timeframe
 from trading_system.macro import recorder
 from trading_system.macro.crucix_client import CrucixClient
 
+DATASETS = Path("research/datasets")
+REPORTS = Path("research/reports")
+EXPERIMENTS = Path("research/experiments.jsonl")
+
 app = typer.Typer(help="Intelligence Trading Platform", no_args_is_help=True)
 config_app = typer.Typer(help="Configuration commands", no_args_is_help=True)
 mt5_app = typer.Typer(help="MetaTrader 5 (read-only)", no_args_is_help=True)
@@ -135,7 +139,7 @@ def data_download(
     start: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"], help="UTC, inclusive")],
     end: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"], help="UTC, exclusive")],
     timeframe: Annotated[Timeframe, typer.Option("--tf")] = Timeframe.M15,
-    out: Annotated[Path, typer.Option(help="Output directory")] = Path("research/datasets"),
+    out: Annotated[Path, typer.Option(help="Output directory")] = DATASETS,
 ) -> None:
     """Download closed bars from MT5 to Parquet + manifest (with sha256)."""
     settings = _settings_or_exit()
@@ -160,8 +164,7 @@ def data_download(
 @data_app.command("fred")
 def data_fred(
     start: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"])] = datetime(2009, 1, 1),
-    out: Annotated[Path, typer.Option(help="Output file")] = Path(
-        "research/datasets/fred_macro.json"),
+    out: Annotated[Path, typer.Option(help="Output file")] = DATASETS / "fred_macro.json",
 ) -> None:
     """Download VIX, high-yield spread and 10Y-2Y curve daily history from FRED."""
     from trading_system.macro import fred_history
@@ -184,11 +187,78 @@ def data_fred(
     typer.echo(f"OK {out}")
 
 
+@data_app.command("rates")
+def data_rates(
+    start: Annotated[datetime, typer.Option(formats=["%Y-%m-%d"])] = datetime(2005, 1, 1),
+    out: Annotated[Path, typer.Option(help="Output file")] = DATASETS / "fred_rates.json",
+) -> None:
+    """Download monthly 3-month interbank rates (FRED/OECD) for the 8 carry currencies."""
+    from trading_system.macro import fred_history, rates
+
+    settings = _settings_or_exit()
+    if settings.fred_api_key is None:
+        typer.echo("FRED_API_KEY is not set in .env", err=True)
+        raise typer.Exit(code=1)
+    key = settings.fred_api_key.get_secret_value()
+    series = {}
+    for ccy in rates.FRED_COUNTRY:
+        try:
+            series[ccy] = fred_history.fetch_series(rates.series_id(ccy), key, start.date())
+        except (RuntimeError, httpx.HTTPError) as exc:
+            typer.echo(f"ERROR {ccy}: {type(exc).__name__}: {exc}", err=True)
+            raise typer.Exit(code=1) from None
+        obs = series[ccy]
+        typer.echo(f"{ccy}: {len(obs)} months {obs[0][0]} -> {obs[-1][0]}")
+    fred_history.save(series, out)
+    typer.echo(f"OK {out}")
+
+
+def _write_report(result: dict[str, Any], out: Path) -> Path:
+    from trading_system.backtest import report, runner
+
+    out.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    stem = out / f"{stamp}-{result['label']}"
+    stem.with_suffix(".json").write_text(json.dumps(result, indent=1, default=str),
+                                         encoding="utf-8")
+    stem.with_suffix(".md").write_text(report.render(result), encoding="utf-8")
+    runner.log_experiment(result, EXPERIMENTS)
+    for c in result["gate_a"]:
+        typer.echo(f"{c['id']:>4} {c['status']:<8} {c['criterion']}: {c['value']}")
+    typer.echo(f"Gate A passed: {result['gate_a_passed']}  ->  {stem.with_suffix('.md')}")
+    return stem
+
+
+@backtest_app.command("carry")
+def backtest_carry(
+    symbols: Annotated[str, typer.Option(help="Comma separated USD pairs")] = (
+        "EURUSD,GBPUSD,AUDUSD,NZDUSD,USDJPY,USDCAD,USDCHF"),
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+) -> None:
+    """Run carry-v001 (ADR 0004) on D1 with costs, swap, walk-forward and Gate A."""
+    from trading_system.backtest import runner
+    from trading_system.macro.fred_history import load as load_fred
+    from trading_system.macro.rates import RateHistory
+
+    rates_path = data / "fred_rates.json"
+    if not rates_path.exists():
+        typer.echo("missing rates: run `trading-system data rates` first", err=True)
+        raise typer.Exit(code=1)
+    bars, hashes = runner.load_datasets(
+        data, [s.strip().upper() for s in symbols.split(",")], Timeframe.D1)
+    result = runner.run_carry_suite(
+        bars, hashes, RateHistory(load_fred(rates_path)), neighbours=neighbours,
+        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    _write_report(result, out)
+
+
 @backtest_app.command("run")
 def backtest_run(
     symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",
-    data: Annotated[Path, typer.Option(help="Datasets directory")] = Path("research/datasets"),
-    out: Annotated[Path, typer.Option(help="Reports directory")] = Path("research/reports"),
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
     holdout: Annotated[bool, typer.Option(
         help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
@@ -197,7 +267,7 @@ def backtest_run(
         help="none | block | confirm (ADR 0003, needs `data fred`)")] = "none",
 ) -> None:
     """Run baseline-v001 with costs x1/x1.5/x2, walk-forward and Gate A. Writes a report."""
-    from trading_system.backtest import gates, report, runner
+    from trading_system.backtest import gates, runner
     from trading_system.macro.fred_history import FredMacroHistory
     from trading_system.macro.fred_history import load as load_fred
     from trading_system.strategy.baseline import BaselineParams
@@ -235,16 +305,7 @@ def backtest_run(
     result = runner.run_suite(bars, hashes, params=params, macro=macro, macro_source=macro_source,
                               holdout=holdout, neighbours=neighbours,
                               progress=lambda name: typer.echo(f"  running {name}...", err=True))
-    out.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    stem = out / f"{stamp}-{result['label']}"
-    stem.with_suffix(".json").write_text(json.dumps(result, indent=1, default=str),
-                                         encoding="utf-8")
-    stem.with_suffix(".md").write_text(report.render(result), encoding="utf-8")
-    runner.log_experiment(result, Path("research/experiments.jsonl"))
-    for c in result["gate_a"]:
-        typer.echo(f"{c['id']:>4} {c['status']:<8} {c['criterion']}: {c['value']}")
-    typer.echo(f"Gate A passed: {result['gate_a_passed']}  ->  {stem.with_suffix('.md')}")
+    _write_report(result, out)
 
 
 @macro_app.command("check")

@@ -11,6 +11,16 @@
 
 ## Registro
 
+### 2026-10-12 — H-CARRY-1 (ADR 0004): carry de divisas — rama `feat/carry`
+
+- Pre-registro (ADR 0004) commiteado antes del código; código commiteado antes de cada corrida.
+- Implementado: tasas FRED punto-en-el-tiempo (`macro/rates.py`, disponibles en M+2), `strategy/carry.py`, y en el motor: salidas por señal, swap diario, procesamiento en dos pasadas de velas simultáneas, conversión de P&L para todos los USDXXX, exposición por divisa configurable. Comandos `data rates` y `backtest carry`. 7 pares × 16 años D1.
+- **Corrida 1 inválida** (documentada en la adenda de la ADR 0004): el mínimo de 0.01 lotes con 10 000 USD y un falso positivo de `tick_value_mismatch` del gestor de riesgo descartaban ~80 % de las señales. Corregido: dimensionamiento con la estimación de pérdida más conservadora y verificación de `tick_value` con tolerancia proporcional al stop; capital de simulación 100 000 USD.
+- **Bug encontrado al revisar la corrida 2**: las posiciones abiertas al final del periodo de investigación se fechaban al final del archivo y **acumulaban swap más allá del corte del hold-out**, inflando el resultado. Corregido con test; la corrida 3 es la válida.
+- Resultado válido: **no pasa la Puerta A**. En 15 años queda prácticamente en el punto de equilibrio, con muy pocas operaciones (falla A2) y vecinas inestables (unas positivas, otras negativas). Los años 2010-2015 (tasas cerca de cero) son negativos, como anticipaba el prior. Hold-out no usado.
+- Tentación registrada y descartada: "el carry funciona cuando las tasas son altas" se ve sugerente en algunos años, pero formularlo ahora sería ajustar la hipótesis a los datos ya vistos.
+- Hallazgo práctico: con 10 000 USD no es viable un carry diario con 0.25 % de riesgo por operación (mínimo de 0.01 lotes).
+
 ### 2026-10-12 — H-MACRO-1 (ADR 0003): filtro de régimen con historia de FRED — rama `feat/fred-macro-filter`
 
 - Pre-registro (ADR 0003) y adenda de datos (spread HY solo desde 2023-10) commiteados **antes** de ejecutar; código commiteado antes de las corridas.

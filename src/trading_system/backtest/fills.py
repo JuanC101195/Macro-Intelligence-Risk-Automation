@@ -14,7 +14,7 @@ from typing import Literal
 
 from trading_system.broker.contracts import Bar
 
-ExitReason = Literal["stop_loss", "stop_loss_gap", "take_profit", "end_of_data"]
+ExitReason = Literal["stop_loss", "stop_loss_gap", "take_profit", "signal_exit", "end_of_data"]
 
 
 @dataclass(frozen=True)

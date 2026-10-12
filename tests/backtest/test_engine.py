@@ -109,6 +109,15 @@ def test_short_target_not_hit_if_only_the_bid_touches_it() -> None:
     assert t.exit_reason == "end_of_data"  # bid low 1.0959 < 1.0960 but ask low 1.09602 > target
 
 
+def test_end_of_data_exit_is_dated_at_the_research_end_not_the_file_end() -> None:
+    bars = flat(3) + [bar(i, 1.1001, 1.1005, 1.0995, 1.1001) for i in range(3, 40)]
+    plan = {("EURUSD", bars[2].time): ("LONG", 1.10012, 1.0980, 1.1040)}
+    config = BacktestConfig(symbols=("EURUSD",), start=T0, end=bars[10].time, limits=LIMITS)
+    [t] = Backtest(config, {"EURUSD": bars}, decider=scripted(plan)).run().trades
+    assert t.exit_reason == "end_of_data"
+    assert t.exit_time == bars[9].time + M15  # last bar before `end`, not bars[-1]
+
+
 def test_fill_cancelled_across_data_gap() -> None:
     bars = flat(3) + [bar(5, 1.1001, 1.1010, 1.0995, 1.1005)]  # bar 3 and 4 missing
     r = run({"EURUSD": bars}, {("EURUSD", bars[2].time): ("LONG", 1.10012, 1.0980, 1.1040)})
