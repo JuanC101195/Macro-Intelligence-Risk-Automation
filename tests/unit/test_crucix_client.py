@@ -191,6 +191,17 @@ class TestRecorder:
         contexts = recorder.load_contexts(path)
         assert contexts[0].vix == 14.8
 
+    def test_single_instance_lock(self, tmp_path: Path) -> None:
+        with (
+            recorder.single_instance(tmp_path),
+            pytest.raises(recorder.AlreadyRunningError),
+            recorder.single_instance(tmp_path),
+        ):
+            pass
+        # Released after exit: can be taken again.
+        with recorder.single_instance(tmp_path):
+            pass
+
     def test_records_unknown_when_down(self, tmp_path: Path) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("down")

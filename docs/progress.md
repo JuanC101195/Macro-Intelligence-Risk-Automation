@@ -19,6 +19,17 @@
 - Tarea 3.1 hecha: respuesta real guardada como `tests/fixtures/crucix_real_20261012.json` (subconjunto, sin historiales) con test.
 - `conflict_events` = 0 porque ACLED requiere cuenta propia; no es señal útil hasta configurarla.
 
+### 2026-10-11 — Grabación macro persistente en el PC (provisional)
+
+- Tareas del Programador de Windows `ITP-Crucix` y `ITP-MacroRecorder` (al iniciar sesión, sin admin, sin límite de tiempo, funcionan con batería). Scripts en `infra/windows/`; quitar con `register-tasks.ps1 -Unregister`. Logs en `%LOCALAPPDATA%\itp\logs`.
+- Primer snapshot real grabado 2026-10-12 01:38 UTC (`risk_on`, VIX 14.84).
+- Problemas encontrados y corregidos:
+  - PowerShell 5.1 + redirección de stderr + `ErrorActionPreference=Stop` mataba a Crucix y al grabador → la redirección la hace `cmd.exe`.
+  - El grabador arrancaba antes de que `/api/data` respondiera (503 al inicio de Crucix) → espera a `/api/data` 200.
+  - Detener la tarea no mata a los procesos hijos → quedaron grabadores huérfanos que habrían duplicado snapshots. **Candado de instancia única** en el grabador (bloqueo del SO, se libera si el proceso muere); un segundo grabador sale con código 3.
+- Los 3 primeros snapshots de hoy son `unknown` (arranques fallidos); se mantienen porque son la verdad de ese momento.
+- Solo graba con el PC encendido. Siguiente: VM Linux en Azure for Students con Docker Compose (Crucix + grabador).
+
 ### 2026-10-11 — Conexión real a MT5 y descarga de histórico
 
 - Cuenta **demo** MetaQuotes-Demo, USD, 10 000, 1:100, login `****9960`. Conectada con la **contraseña de inversor**: `trade_allowed=False`, MT5 rechazaría cualquier orden. La contraseña principal no está en `.env` hasta la Fase 11.

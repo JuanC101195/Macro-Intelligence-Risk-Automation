@@ -180,13 +180,17 @@ def macro_record(
     settings = _settings_or_exit()
     client = _crucix(settings)
     try:
-        while True:
-            ctx = recorder.record_once(client, out)
-            typer.echo(f"{datetime.now(UTC):%Y-%m-%d %H:%M:%S}Z {ctx.risk_regime} "
-                       f"conf={ctx.confidence} stale={ctx.data_stale}")
-            if once:
-                break
-            time.sleep(interval_minutes * 60)
+        with recorder.single_instance(out):
+            while True:
+                ctx = recorder.record_once(client, out)
+                typer.echo(f"{datetime.now(UTC):%Y-%m-%d %H:%M:%S}Z {ctx.risk_regime} "
+                           f"conf={ctx.confidence} stale={ctx.data_stale}")
+                if once:
+                    break
+                time.sleep(interval_minutes * 60)
+    except recorder.AlreadyRunningError as exc:
+        typer.echo(f"NOT STARTED: {exc}", err=True)
+        raise typer.Exit(code=3) from None
     except KeyboardInterrupt:
         typer.echo("stopped")
     finally:

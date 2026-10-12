@@ -9,6 +9,9 @@ Moves to the database in Phase 7.
 from __future__ import annotations
 
 import json
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,6 +20,37 @@ from trading_system.macro.crucix_client import CrucixClient, normalize, raw_subs
 from trading_system.macro.macro_context import MacroContext
 
 DEFAULT_DIR = Path("research/macro_snapshots")
+
+
+class AlreadyRunningError(RuntimeError):
+    """Another recorder holds the lock for this output directory."""
+
+
+@contextmanager
+def single_instance(out_dir: Path) -> Iterator[None]:
+    """Exclusive, OS-level lock per output directory.
+
+    Two recorders writing the same files would duplicate snapshots. The lock is
+    released by the OS if the process dies, so a crash never leaves it stuck.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fh = (out_dir / ".recorder.lock").open("a+b")
+    try:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise AlreadyRunningError(f"another recorder is already writing to {out_dir}") from None
+        yield
+    finally:
+        fh.close()
 
 
 def record_once(client: CrucixClient, out_dir: Path = DEFAULT_DIR) -> MacroContext:
@@ -46,4 +80,11 @@ def load_contexts(path: Path) -> list[MacroContext]:
     return contexts
 
 
-__all__ = ["DEFAULT_DIR", "load_contexts", "normalize", "record_once"]
+__all__ = [
+    "DEFAULT_DIR",
+    "AlreadyRunningError",
+    "load_contexts",
+    "normalize",
+    "record_once",
+    "single_instance",
+]
