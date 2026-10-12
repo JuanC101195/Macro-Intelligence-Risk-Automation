@@ -74,7 +74,9 @@ class TestMixture:
     def test_is_deterministic(self) -> None:
         r = Noise(2)
         pts = [(r.gauss(0, 1), r.gauss(0, 1)) for _ in range(200)]
-        assert fit_mixture(pts, SMALL) == fit_mixture(pts, SMALL)
+        first = fit_mixture(pts, SMALL)
+        second = fit_mixture(list(pts), SMALL)
+        assert first == second
 
     def test_needs_enough_points(self) -> None:
         with pytest.raises(ValueError, match="not enough"):

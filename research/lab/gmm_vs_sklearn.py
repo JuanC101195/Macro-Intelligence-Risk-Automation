@@ -35,6 +35,7 @@ def compare(symbol: str, start: datetime, end: datetime, params: RegimeParams) -
         n_components=params.components, covariance_type="full", tol=params.tol,
         reg_covar=params.reg, max_iter=params.max_iter, weights_init=np.array(weights),
         means_init=np.array(means), precisions_init=np.array(precisions),
+        random_state=0,  # unused with explicit init; fixed for reproducibility
     ).fit(pts)
 
     # Same component order: both start from the same initialization.
