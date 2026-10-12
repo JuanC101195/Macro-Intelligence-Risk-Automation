@@ -22,6 +22,7 @@ from trading_system.backtest.costs import CostModel
 from trading_system.backtest.engine import Backtest, BacktestConfig
 from trading_system.backtest.financing import make_financing
 from trading_system.backtest.metrics import compute
+from trading_system.backtest.pairs_engine import PairBacktest
 from trading_system.backtest.walk_forward import add_months, rolling_windows, window_results
 from trading_system.broker.contracts import Bar
 from trading_system.broker.history import file_sha256, read_bars
@@ -32,6 +33,7 @@ from trading_system.risk.contracts import RiskLimits
 from trading_system.strategy.baseline import BaselineParams
 from trading_system.strategy.breakout import BreakoutParams, BreakoutStrategy
 from trading_system.strategy.carry import CarryParams, CarryStrategy
+from trading_system.strategy.pairs import PairsParams, PairsStrategy
 
 WINDOW_MONTHS = 6
 
@@ -283,6 +285,53 @@ def run_breakout_suite(
                      "rate + 1%, short pays 1%",
                      "fixed spreads and slippage per instrument (ADR 0006)",
                      "currency exposure checked only for 6-letter symbols, at 1x risk",
+                     *_COMMON_ASSUMPTIONS),
+        neighbours=neighbours, progress=progress,
+    )
+
+
+PAIRS_NEIGHBOURS: dict[str, dict[str, Any]] = {
+    "entry_z=1.5": {"entry_z": 1.5},
+    "entry_z=2.5": {"entry_z": 2.5},
+    "z_window=120": {"z_window": 120},
+    "z_window=480": {"z_window": 480},
+    "beta_window=500": {"beta_window": 500},
+    "beta_window=2000": {"beta_window": 2_000},
+    "no_coint_filter": {"coint_filter": False},
+}
+
+
+def run_pairs_suite(
+    bars: Mapping[str, Sequence[Bar]],
+    hashes: Mapping[str, str],
+    rates: RateHistory,
+    *,
+    params: PairsParams | None = None,
+    neighbours: bool = True,
+    progress: Callable[[str], None] = lambda _: None,
+) -> dict[str, Any]:
+    """pairs-v001 (ADR 0007) on H1, cent-equivalent capital (ADR 0005)."""
+    params = params or PairsParams()
+    financing = make_financing(rates)
+    strategies: dict[str, PairsStrategy] = {}  # the cost runs reuse the base precomputation
+
+    def build(cfg: BacktestConfig, variant: PairsParams | None) -> Backtest:
+        chosen = variant or params
+        key = chosen.model_dump_json()
+        if key not in strategies:
+            strategies[key] = PairsStrategy(chosen, bars)
+        return PairBacktest(cfg, bars, strategies[key], financing=financing)
+
+    variants = {n: params.model_copy(update=c) for n, c in PAIRS_NEIGHBOURS.items()}
+    return evaluate_suite(
+        bars, hashes,
+        strategy_cfg=BaselineParams(timeframe=Timeframe.H1, version=params.version),
+        strategy_info=params.model_dump(mode="json"), build=build, variants=variants,
+        limits=_carry_limits(), initial_equity=17_500.0,
+        assumptions=("capital 17,500 = cent-account equivalent of ~700,000 COP (ADR 0005)",
+                     "one trade = one complete pair (both legs), net P&L",
+                     "financing per leg: FX rate differential - 1% per year",
+                     "fixed retail spreads and 2 points slippage on every leg fill",
                      *_COMMON_ASSUMPTIONS),
         neighbours=neighbours, progress=progress,
     )

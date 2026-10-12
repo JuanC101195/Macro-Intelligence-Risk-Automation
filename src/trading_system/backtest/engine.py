@@ -389,13 +389,17 @@ class Backtest:
         pnl += pos.swap
         self.book.balance += pnl
         self.book.realized_today += pnl
-        self.book.consecutive_losses = self.book.consecutive_losses + 1 if pnl < 0 else 0
+        self._count_loss(pnl)
         self.trades.append(ClosedTrade(
             symbol=sym, side=i.side, signal_time=pos.signal_time, entry_time=pos.entry_time,
             entry_price=pos.entry, exit_time=when, exit_price=hit.price, volume=i.volume,
             risk_amount=i.risk_amount, pnl=round(pnl, 2), exit_reason=hit.reason,
             swap=round(pos.swap, 2),
         ))
+
+    def _count_loss(self, pnl: float) -> None:
+        """Consecutive-loss streak per closed position (pair backtests count per pair)."""
+        self.book.consecutive_losses = self.book.consecutive_losses + 1 if pnl < 0 else 0
 
     def _close_all_at_end(self) -> None:
         while self.book.open:  # _close() removes the entry, so take one at a time
