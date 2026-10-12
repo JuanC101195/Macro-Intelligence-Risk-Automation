@@ -101,3 +101,13 @@ def test_no_order_send_anywhere_yet() -> None:
         if "order_send" in p.read_text(encoding="utf-8")
     ]
     assert not offenders, f"order_send must not appear before Phase 11: {offenders}"
+
+
+# ADR 0009: research-lab libraries never enter the package (orders, risk, backtest verdicts).
+LAB_ONLY = ("vectorbt", "numba", "sklearn")
+
+
+@pytest.mark.parametrize("path", _python_files(), ids=lambda p: str(p.relative_to(SRC)))
+def test_no_research_lab_imports(path: Path) -> None:
+    bad = sorted(m for m in _imports(path) if m.split(".")[0] in LAB_ONLY)
+    assert not bad, f"{path.name} imports research-lab libraries {bad} (ADR 0009)"
