@@ -45,3 +45,14 @@ Montecarlo de drawdown, Deflated Sharpe Ratio y mapas de estabilidad: se harán 
 - Se aplica en las señales de vectorbt la misma regla del motor de cancelar una entrada si la vela siguiente no es contigua (huecos de fin de semana o de sesión), y el mismo stop y take-profit en precio (convertidos a fracción del precio de entrada).
 - Se excluye la última operación de cada instrumento si queda abierta al final del periodo (el motor propio la cierra por `end_of_data`).
 - Resultado de la parte del GMM (ya ejecutada): coincide con scikit-learn hasta 1e-13 en medias y pesos, con el mismo número de iteraciones.
+
+## Resultado de la prueba 1 (2026-10-12) — pasa
+
+Motor propio contra vectorbt, `breakout-h4-v001`, 11 instrumentos uno a uno, costes en cero (`research/lab/audit_engine.py`): **3 139 operaciones, 95.9 % idénticas** (mismas velas de entrada y salida, mismos precios) y el **100 %** explicado con cuatro diferencias de convención, todas a favor de la prudencia del motor propio:
+
+1. El motor propio revisa el stop en la misma vela del fill (entra a la apertura; si después la vela toca el stop, sale). vectorbt no revisa stops en la vela de entrada (113 operaciones).
+2. Tocar exactamente el stop lo ejecuta en el motor propio (1).
+3. Un take-profit atravesado por un hueco se llena al precio límite en el motor propio y a la apertura en vectorbt (1).
+4. vectorbt admite una orden y un precio por vela: no puede expresar "entrar a la apertura y salir al cierre" ni "ignorar una entrada y salir al cierre" en la misma vela (1), y las diferencias anteriores dejan posiciones abiertas más tiempo en vectorbt, lo que desplaza las entradas siguientes (cascada, 12).
+
+No se encontró ningún bug en el motor propio. Al montar la comparación salieron dos errores **del script de auditoría** (redondeo del stop y conflictos de señales en vectorbt), corregidos antes del resultado final.
