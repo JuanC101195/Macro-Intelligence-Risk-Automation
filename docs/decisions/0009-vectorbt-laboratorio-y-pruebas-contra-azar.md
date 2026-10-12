@@ -56,3 +56,9 @@ Motor propio contra vectorbt, `breakout-h4-v001`, 11 instrumentos uno a uno, cos
 4. vectorbt admite una orden y un precio por vela: no puede expresar "entrar a la apertura y salir al cierre" ni "ignorar una entrada y salir al cierre" en la misma vela (1), y las diferencias anteriores dejan posiciones abiertas más tiempo en vectorbt, lo que desplaza las entradas siguientes (cascada, 12).
 
 No se encontró ningún bug en el motor propio. Al montar la comparación salieron dos errores **del script de auditoría** (redondeo del stop y conflictos de señales en vectorbt), corregidos antes del resultado final.
+
+## Resultado de la prueba 2 (2026-10-12) — el filtro GMM no supera al azar
+
+200 filtros aleatorios con la misma proporción de velas "tendencia" por instrumento, motor propio, configuración base (`research/lab/null_regime.py`; la corrida del filtro GMM reproduce exactamente el resultado de la ADR 0008). El profit factor del filtro GMM queda en el **percentil 77** de los aleatorios (p ≈ 0.23), **por debajo del percentil 95** exigido. Un filtro aleatorio típico ya mejora al control sin filtro casi tanto como el GMM: la mejora de la ADR 0008 frente a su control **no es evidencia de que los regímenes aporten información**. El drawdown del GMM es menor que el de la mayoría de los aleatorios, pero eso no era el criterio y no se usa a posteriori.
+
+Conforme a lo pre-registrado: **se abandona la línea de regímenes**.
