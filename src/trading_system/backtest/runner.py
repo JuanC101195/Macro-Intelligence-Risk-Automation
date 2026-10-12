@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +35,7 @@ from trading_system.strategy.baseline import BaselineParams
 from trading_system.strategy.breakout import BreakoutParams, BreakoutStrategy
 from trading_system.strategy.carry import CarryParams, CarryStrategy
 from trading_system.strategy.pairs import PairsParams, PairsStrategy
+from trading_system.strategy.regimes import RegimeParams, trend_flags
 
 WINDOW_MONTHS = 6
 
@@ -95,6 +97,7 @@ def evaluate_suite(
     assumptions: Sequence[str],
     currency_exposure_mult: float = 1.0,
     initial_equity: float = 10_000.0,
+    start_offset_months: int = 0,
     holdout: bool = False,
     neighbours: bool = True,
     progress: Callable[[str], None] = lambda _: None,
@@ -107,8 +110,9 @@ def evaluate_suite(
     symbols = tuple(sorted(bars))
     cut = holdout_start(bars)
     first = max(b[0].time for b in bars.values())
+    trade_from = add_months(first, start_offset_months)  # e.g. a model training window
     end = add_months(min(b[-1].time for b in bars.values()), 1) if holdout else cut
-    start = cut if holdout else first
+    start = cut if holdout else trade_from
     base_cfg = BacktestConfig(symbols=symbols, start=start, end=end, limits=limits,
                               strategy=strategy_cfg, data_hashes=dict(hashes),
                               currency_exposure_mult=currency_exposure_mult,
@@ -133,7 +137,7 @@ def evaluate_suite(
             m, _ = run(base_cfg, variant, name)
             variant_exp[name] = m["expectancy"]
 
-    history_years = (cut - first).days / 365.25
+    history_years = (cut - trade_from).days / 365.25
     checks = gates.gate_a(history_years, base, costs15, windows,
                           neighbors=variant_exp or None,
                           holdout=base if holdout else None)
@@ -332,6 +336,86 @@ def run_pairs_suite(
                      "one trade = one complete pair (both legs), net P&L",
                      "financing per leg: FX rate differential - 1% per year",
                      "fixed retail spreads and 2 points slippage on every leg fill",
+                     *_COMMON_ASSUMPTIONS),
+        neighbours=neighbours, progress=progress,
+    )
+
+
+REGIME_NEIGHBOURS: dict[str, dict[str, Any]] = {
+    "components=2": {"components": 2},
+    "components=4": {"components": 4},
+    "feature_window=20": {"feature_window": 20},
+    "feature_window=50": {"feature_window": 50},
+    "train_years=1": {"train_years": 1},
+    "train_years=3": {"train_years": 3},
+}
+REGIME_TRAIN_MONTHS = 24  # ADR 0008: trade only after the base training window
+
+
+def _flags_for(args: tuple[str, Sequence[Bar], RegimeParams, datetime]
+               ) -> tuple[str, dict[datetime, bool]]:
+    sym, series, params, active_from = args
+    return sym, trend_flags(series, params, active_from)
+
+
+def regime_flags(bars: Mapping[str, Sequence[Bar]], params: RegimeParams,
+                 active_from: datetime) -> dict[str, dict[datetime, bool]]:
+    """Per-instrument fits are independent: computed in parallel, results are identical."""
+    jobs = [(sym, bars[sym], params, active_from) for sym in sorted(bars)]
+    with ProcessPoolExecutor() as pool:
+        return dict(pool.map(_flags_for, jobs))
+
+
+def run_regime_suite(
+    bars: Mapping[str, Sequence[Bar]],
+    hashes: Mapping[str, str],
+    rates: RateHistory,
+    *,
+    control: bool = False,
+    regime: RegimeParams | None = None,
+    neighbours: bool = True,
+    progress: Callable[[str], None] = lambda _: None,
+) -> dict[str, Any]:
+    """regime-h4-v001, or its unfiltered control breakout-h4-v001 (ADR 0008)."""
+    version = "breakout-h4-v001" if control else "regime-h4-v001"
+    params = BreakoutParams(version=version, timeframe=Timeframe.H4)
+    regime = regime or RegimeParams()
+    financing = make_financing(rates)
+    first = max(b[0].time for b in bars.values())
+    active_from = add_months(first, REGIME_TRAIN_MONTHS)
+    flags: dict[str, dict[str, dict[datetime, bool]]] = {}
+
+    def build(cfg: BacktestConfig, variant: Any) -> Backtest:
+        if control:
+            strategy = BreakoutStrategy(variant or params, bars)
+        else:
+            chosen = variant or regime
+            key = chosen.model_dump_json()
+            if key not in flags:
+                progress(f"fitting regimes {key}")
+                flags[key] = regime_flags(bars, chosen, active_from)
+            strategy = BreakoutStrategy(params, bars, regime=flags[key])
+        return Backtest(cfg, bars, decider=strategy.decide, exit_check=strategy.exit_check,
+                        financing=financing)
+
+    if control:
+        variants: dict[str, Any] = {n: params.model_copy(update=c)
+                                    for n, c in BREAKOUT_NEIGHBOURS.items()}
+        info = params.model_dump(mode="json")
+    else:
+        variants = {n: regime.model_copy(update=c) for n, c in REGIME_NEIGHBOURS.items()}
+        info = {**params.model_dump(mode="json"), "regime": regime.model_dump(mode="json")}
+    return evaluate_suite(
+        bars, hashes,
+        strategy_cfg=BaselineParams(timeframe=Timeframe.H4, version=version),
+        strategy_info=info, build=build, variants=variants,
+        limits=_breakout_limits(), initial_equity=17_500.0,
+        start_offset_months=REGIME_TRAIN_MONTHS,
+        assumptions=("capital 17,500 = cent-account equivalent of ~700,000 COP (ADR 0005)",
+                     "breakout rules of ADR 0006 counted in H4 bars",
+                     "regime filter: per-instrument GMM refitted every 6 months on the "
+                     "previous years only" if not control else "no regime filter (control)",
+                     "financing, spreads and slippage as ADR 0006",
                      *_COMMON_ASSUMPTIONS),
         neighbours=neighbours, progress=progress,
     )

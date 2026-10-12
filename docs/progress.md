@@ -11,6 +11,16 @@
 
 ## Registro
 
+### 2026-10-12 — H-REGIME-1 (ADR 0008): ruptura H4 con filtro de regímenes GMM — rama `feat/regimes-gmm`
+
+- Pre-registro (ADR 0008) commiteado antes del código, con la profundidad H4 encontrada al descargar (índices desde 2012-08 → se opera desde 2014-08); código commiteado antes de las corridas.
+- Implementado: `strategy/regimes.py` (características vol/er, mezcla gaussiana 2-D por EM en Python puro, reajuste semestral solo con el pasado, sin ventana incompleta), ruptura con timeframe configurable y filtro de régimen opcional, cálculo paralelo por instrumento, comando `backtest regime [--control]`. 14 tests nuevos (incluye "cambiar el futuro no cambia las etiquetas del pasado"); 392 en verde.
+- **Control `breakout-h4-v001`: no pasa.** En H4 la muestra ya alcanza la A2, pero es negativa, con drawdown muy por encima del límite y vecinas mayoritariamente negativas.
+- **Principal `regime-h4-v001`: no pasa**, aunque es la primera hipótesis con expectancy positiva con costes ×1 y ×1.5. Falla profit factor mínimo (A4), ventanas positivas (A6), drawdown (A7, por poco), dependencia del mejor año (A8) y estabilidad (A9: la mitad de las vecinas negativas). Frente al control, el filtro mejora claramente el profit factor y reduce el drawdown a la mitad. Hold-out no usado.
+- Lectura: el filtro de régimen aporta algo frente al control, pero el resultado depende de los parámetros del GMM (pico, no meseta) y de un año concreto. Pendiente antes de creer siquiera la mejora relativa: comparar contra un filtro **aleatorio** que bloquee la misma proporción de señales.
+- Tentación registrada y descartada: elegir K = 4 o 3 años de entrenamiento (las vecinas positivas) sería seleccionar a posteriori.
+- Balance: **10 hipótesis probadas (contando control y principal), ninguna pasa la Puerta A**.
+
 ### 2026-10-12 — H-PAIRS-1 (ADR 0007): arbitraje estadístico AUDUSD–NZDUSD — rama `feat/pairs-aud-nzd`
 
 - Pre-registro (ADR 0007) y adenda de implementación (ADF con 1 rezago y valor crítico de MacKinnon, escalado proporcional de las patas, racha de pérdidas por par) commiteados **antes** del código; código commiteado antes de la corrida.

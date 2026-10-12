@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from tests.fixtures.noise import Noise
 from trading_system.broker.contracts import Bar
 from trading_system.strategy.pairs import (
     PairsParams,
@@ -21,27 +21,6 @@ T0 = datetime(2024, 1, 1, tzinfo=UTC)
 H1 = timedelta(hours=1)
 SMALL = PairsParams(beta_window=60, beta_every=1, z_window=30, atr_period=5,
                     coint_filter=False)
-
-
-class Noise:
-    """Deterministic N(0, 1) stream (LCG + Box-Muller): reproducible, no `random` module."""
-
-    def __init__(self, seed: int) -> None:
-        self._state = seed + 1
-        self._spare: Iterator[float] = iter(())
-
-    def _uniform(self) -> float:
-        self._state = (6364136223846793005 * self._state + 1442695040888963407) % 2**64
-        return ((self._state >> 11) + 1) / (2**53 + 1)
-
-    def gauss(self, mu: float, sigma: float) -> float:
-        z = next(self._spare, None)
-        if z is None:
-            u1, u2 = self._uniform(), self._uniform()
-            radius = math.sqrt(-2 * math.log(u1))
-            z = radius * math.cos(2 * math.pi * u2)
-            self._spare = iter((radius * math.sin(2 * math.pi * u2),))
-        return mu + sigma * z
 
 
 def bars_from(closes: list[float], skip: frozenset[int] = frozenset()) -> list[Bar]:
