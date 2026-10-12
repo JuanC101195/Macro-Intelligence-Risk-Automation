@@ -41,6 +41,20 @@ def test_macro_required_needs_crucix(make_settings: Callable[..., Settings]) -> 
         make_settings(macro_required=True, crucix_enabled=False)
 
 
+@pytest.mark.parametrize(
+    "url",
+    ["ftp://crucix:3117", "file:///etc/passwd", "http://user:pw@crucix:3117",
+     "http://crucix:3117/?redirect=evil", "not a url"],
+)
+def test_crucix_url_must_be_plain_http(make_settings: Callable[..., Settings], url: str) -> None:
+    with pytest.raises(ConfigurationError, match="crucix_base_url"):
+        make_settings(crucix_base_url=url)
+
+
+def test_crucix_url_accepts_http_and_https(make_settings: Callable[..., Settings]) -> None:
+    assert make_settings(crucix_base_url="https://crucix.local:3117").crucix_base_url
+
+
 def test_production_requires_api_key(make_settings: Callable[..., Settings]) -> None:
     with pytest.raises(ConfigurationError, match="API_KEY"):
         make_settings(app_env="production")

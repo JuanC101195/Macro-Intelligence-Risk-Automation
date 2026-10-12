@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -14,14 +15,28 @@ from trading_system.broker import history
 from trading_system.broker.mt5_client import BrokerError, Mt5Client
 from trading_system.config import ConfigurationError, Settings, load_settings
 from trading_system.domain import Timeframe
+from trading_system.macro import recorder
+from trading_system.macro.crucix_client import CrucixClient
 
 app = typer.Typer(help="Intelligence Trading Platform", no_args_is_help=True)
 config_app = typer.Typer(help="Configuration commands", no_args_is_help=True)
 mt5_app = typer.Typer(help="MetaTrader 5 (read-only)", no_args_is_help=True)
 data_app = typer.Typer(help="Historical data", no_args_is_help=True)
+macro_app = typer.Typer(help="Crucix macro context", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 app.add_typer(mt5_app, name="mt5")
 app.add_typer(data_app, name="data")
+app.add_typer(macro_app, name="macro")
+
+
+def _crucix(settings: Settings) -> CrucixClient:
+    if not settings.crucix_enabled:
+        typer.echo("Crucix is disabled (CRUCIX_ENABLED=false)", err=True)
+        raise typer.Exit(code=1)
+    return CrucixClient(
+        settings.crucix_base_url,
+        max_age=timedelta(minutes=settings.macro_max_age_minutes),
+    )
 
 
 def _settings_or_exit() -> Settings:
@@ -137,6 +152,45 @@ def data_download(
     finally:
         client.shutdown()
     typer.echo(f"OK {path}")
+
+
+@macro_app.command("check")
+def macro_check() -> None:
+    """Query Crucix once and print the normalized MacroContext. Exit 1 if unknown."""
+    settings = _settings_or_exit()
+    client = _crucix(settings)
+    try:
+        healthy = client.healthy()
+        context = client.current()
+    finally:
+        client.close()
+    typer.echo(json.dumps({"healthy": healthy, "context": context.model_dump(mode="json")},
+                          indent=2))
+    if context.risk_regime == "unknown":
+        raise typer.Exit(code=1)
+
+
+@macro_app.command("record")
+def macro_record(
+    interval_minutes: Annotated[int, typer.Option(min=1)] = 15,
+    once: Annotated[bool, typer.Option(help="Record a single snapshot and exit")] = False,
+    out: Annotated[Path, typer.Option(help="Output directory")] = recorder.DEFAULT_DIR,
+) -> None:
+    """Append Crucix snapshots to monthly JSONL files. This builds the macro history."""
+    settings = _settings_or_exit()
+    client = _crucix(settings)
+    try:
+        while True:
+            ctx = recorder.record_once(client, out)
+            typer.echo(f"{datetime.now(UTC):%Y-%m-%d %H:%M:%S}Z {ctx.risk_regime} "
+                       f"conf={ctx.confidence} stale={ctx.data_stale}")
+            if once:
+                break
+            time.sleep(interval_minutes * 60)
+    except KeyboardInterrupt:
+        typer.echo("stopped")
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":

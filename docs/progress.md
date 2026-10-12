@@ -11,6 +11,20 @@
 
 ## Registro
 
+### 2026-10-11 — Fase 3 (Crucix) — rama `feat/phase-3-crucix`
+
+Hecho:
+- Contrato de Crucix verificado leyendo su código (commit `3db7068`, 2026-05-19): `/api/data` devuelve 503 hasta el primer barrido; FRED trae números o `null`; VIX en vivo desde Yahoo Finance; no hay histórico consultable. Mapeo documentado en `macro/crucix_client.py` (resuelve Q1 a nivel de código).
+- `macro/crucix_client.py`: `normalize()` pura y tolerante (tipos raros, NaN, timestamps sin zona o futuros → `None`/`unknown`). `CrucixClient` con timeout, reintentos solo ante 5xx/errores de red, caché de 5 min; `current()` nunca lanza excepción.
+- `macro/regime_classifier.py`: reglas `regime-rules-v001` con umbrales redondos fijados antes de cualquier backtest (VIX 16/25, spread HY 3.5/5.0, oro +1.5 %, curva invertida solo refuerza).
+- `macro/recorder.py` + `trading-system macro record`: graba un snapshot por intervalo en JSONL mensual (contexto + subconjunto crudo para re-derivar features). Local, no se sube.
+- `trading-system macro check`. URLs de Crucix/n8n validadas (solo http(s), sin credenciales ni query).
+- 173 tests en verde; ruff y mypy limpios.
+
+Notas:
+- Con Crucix apagado, en Windows cada conexión rechazada tarda ~2 s: `macro check` tarda ~13 s antes de responder `unknown`. En el ciclo de trading (Fase 7) la consulta macro irá en segundo plano.
+- Los fixtures son sintéticos con la forma real. Pendiente 3.1: levantar Crucix (`npm install`, claves gratuitas como FRED) y capturar respuestas reales.
+
 ### 2026-10-11 — Fase 2 (MT5, solo lectura) — rama `feat/phase-2-mt5`
 
 Hecho:
