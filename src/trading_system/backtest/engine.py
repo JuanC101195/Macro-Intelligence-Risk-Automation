@@ -199,6 +199,7 @@ class _Book:
     open: dict[str, _Open] = field(default_factory=dict)
     pending: dict[str, _Pending] = field(default_factory=dict)
     last_close: dict[str, float] = field(default_factory=dict)
+    last_time: dict[str, datetime] = field(default_factory=dict)  # last processed bar
     day_start: datetime | None = None
     day_start_equity: float = 0.0
     realized_today: float = 0.0
@@ -264,6 +265,7 @@ class Backtest:
     def _update_positions(self, sym: str, i: int) -> None:
         bar = self.bars[sym][i]
         self.book.last_close[sym] = bar.close
+        self.book.last_time[sym] = bar.time
         close_time = bar.time + self.tf
         self._roll_day(close_time)
         self._fill_pending(sym, bar)
@@ -393,8 +395,9 @@ class Backtest:
     def _close_all_at_end(self) -> None:
         while self.book.open:  # _close() removes the entry, so take one at a time
             sym = next(iter(self.book.open))
-            last = self.bars[sym][-1]
-            self._close(sym, Exit(self.book.last_close[sym], "end_of_data"), last.time + self.tf)
+            # Close at the last bar actually processed (before cfg.end), not the file end.
+            when = self.book.last_time[sym] + self.tf
+            self._close(sym, Exit(self.book.last_close[sym], "end_of_data"), when)
         if self.book.day_start is not None:
             self.daily.append((self.book.day_start, self._equity()))
 
