@@ -1,13 +1,18 @@
 # Progreso
 
-## Estado actual
+## Estado actual (2026-10-12)
 
-- **Fase:** 1 completa (PR #1 mergeado, CI en verde). Siguiente: Fases 2 y 3.
-- **Criterios de éxito y parada:** fijados en ADR 0002 antes de ver resultados
-- **Modo live:** bloqueado por configuración y por tipos (`OrderIntent.mode` no admite `live`); cubierto por tests
-- **Conexión MT5:** ninguna
-- **Modelos entrenados:** ninguno
-- **Órdenes enviadas:** ninguna
+- **Fases completas:** 0 a 6 (arquitectura, configuración, MT5 solo lectura, Crucix + grabador, estrategia base, gestor de riesgo, backtest con Puerta A automática). Laboratorio de auditoría con vectorbt (ADR 0009).
+- **Investigación:** 10 hipótesis probadas (ADR 0002 a 0008), **ninguna pasa la Puerta A**. Hold-out de 12 meses sin usar. El motor de backtest está auditado contra vectorbt sin bugs, y existe una prueba contra filtros aleatorios.
+- **Modo live:** bloqueado por configuración y por tipos; cubierto por tests.
+- **Conexión MT5:** solo lectura (cuenta demo, contraseña de inversor). **Órdenes enviadas:** ninguna. **Modelos activos:** ninguno.
+- **Infraestructura:** VM de Azure grabando el contexto macro de Crucix 24/7 desde 2026-10.
+
+### Próximos pasos acordados
+
+1. **ADR 0010 — criterio A11:** toda hipótesis debe superar el percentil 95 de su versión aleatoria (entradas o filtros al azar con la misma frecuencia), pre-registrado junto con la hipótesis.
+2. **Fase 7 — paper trading y base de datos:** loop de velas cerradas, paper executor, persistencia y reconciliación simulada, para medir spreads, slippage y comportamiento reales mientras Crucix acumula historia propia.
+3. Investigación nueva solo con una fuente de ventaja con fundamento propio (historia macro de Crucix, COT de la CFTC, eventos), pre-registrada y con A11.
 
 ## Registro
 
