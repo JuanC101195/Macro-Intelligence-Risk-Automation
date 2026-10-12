@@ -23,6 +23,7 @@ from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from itertools import groupby
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -34,7 +35,7 @@ from trading_system.domain import TIMEFRAME_MINUTES, Side
 from trading_system.execution.order_intent import OrderIntent
 from trading_system.macro.macro_context import MacroContext
 from trading_system.risk.contracts import BreakerState, ExposureSnapshot, RiskLimits
-from trading_system.risk.engine import DefaultRiskEngine
+from trading_system.risk.engine import DefaultRiskEngine, RiskConfig
 from trading_system.risk.exposure import trading_day_start
 from trading_system.strategy.baseline import BaselineParams, decide, snapshot_series
 from trading_system.strategy.signals import MarketState, Signal
@@ -56,6 +57,8 @@ class BacktestConfig(BaseModel):
     limits: RiskLimits
     data_hashes: dict[str, str] = {}
     label: str = ""
+    # Per-hypothesis risk setting (ADR 0004 uses 3 for a 3-position USD basket).
+    currency_exposure_mult: float = 1.0
 
     def fingerprint(self) -> str:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()[:16]
@@ -73,8 +76,9 @@ class ClosedTrade(BaseModel):
     exit_price: float
     volume: float
     risk_amount: float
-    pnl: float  # net of commission, account currency
+    pnl: float  # net of commission and swap, account currency
     exit_reason: ExitReason
+    swap: float = 0.0  # financing included in pnl
 
     @property
     def r_multiple(self) -> float:
@@ -98,13 +102,25 @@ class BacktestResult:
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def _check_usd_pair(symbol: str) -> None:
+    # USD account: only XXXUSD (profit already in USD) and USDXXX (profit converted at
+    # the pair's own price). Crosses would need a third rate to convert.
+    if "USD" not in (symbol[:3], symbol[3:]):
+        raise ValueError(f"only USD pairs are supported in backtests, got {symbol}")
+
+
+def point_size(symbol: str) -> float:
+    return 1e-3 if symbol.endswith("JPY") else 1e-5
+
+
 def symbol_spec(symbol: str, price: float) -> SymbolSpec:
-    """Spec for a USD account; USDJPY tick value converted at the current price."""
-    jpy = symbol.endswith("JPY")
-    tick = 1e-3 if jpy else 1e-5
+    """Spec for a USD account; for USDXXX the tick value is converted at the current price."""
+    _check_usd_pair(symbol)
+    tick = point_size(symbol)
+    quote_is_usd = symbol.endswith("USD")
     return SymbolSpec(
-        symbol=symbol, digits=3 if jpy else 5, point=tick, tick_size=tick,
-        tick_value=tick * CONTRACT / price if jpy else tick * CONTRACT,
+        symbol=symbol, digits=3 if symbol.endswith("JPY") else 5, point=tick, tick_size=tick,
+        tick_value=tick * CONTRACT if quote_is_usd else tick * CONTRACT / price,
         contract_size=CONTRACT, volume_min=0.01, volume_max=100.0, volume_step=0.01,
         stops_level_points=0, freeze_level_points=0, currency_base=symbol[:3],
         currency_profit=symbol[3:], currency_margin=symbol[:3], trade_allowed=True,
@@ -113,9 +129,15 @@ def symbol_spec(symbol: str, price: float) -> SymbolSpec:
 
 
 def pnl_money(symbol: str, side: BrokerSide, volume: float, entry: float, exit_: float) -> float:
+    """P&L in USD. USDXXX profits are in XXX and converted at the exit price."""
+    _check_usd_pair(symbol)
     sign = 1 if side == "buy" else -1
     raw = sign * (exit_ - entry) * volume * CONTRACT
-    return raw / exit_ if symbol.endswith("JPY") else raw
+    return raw if symbol.endswith("USD") else raw / exit_
+
+
+def notional_usd(symbol: str, volume: float, price: float) -> float:
+    return volume * CONTRACT * (1.0 if symbol.startswith("USD") else price)
 
 
 class BacktestQuotes:
@@ -129,8 +151,7 @@ class BacktestQuotes:
         if side not in ("buy", "sell"):
             raise ValueError(f"invalid side {side!r}")
         # Margin is symmetric for buys and sells on these pairs.
-        notional_usd = volume * CONTRACT * (1.0 if symbol.startswith("USD") else price)
-        return notional_usd / LEVERAGE
+        return notional_usd(symbol, volume, price) / LEVERAGE
 
 
 class InMemoryBreaker:
@@ -161,6 +182,8 @@ class _Open:
     signal_time: datetime
     entry_time: datetime
     entry: float
+    swap: float = 0.0
+    accrued_to: datetime | None = None
 
 
 @dataclass
@@ -190,15 +213,20 @@ class Backtest:
         bars: Mapping[str, Sequence[Bar]],
         macro: Callable[[datetime], MacroContext] | None = None,
         decider: Callable[..., Signal] = decide,
+        exit_check: Callable[[str, Bar, BrokerSide], bool] | None = None,
+        financing: Callable[[str, BrokerSide, datetime], float | None] | None = None,
     ) -> None:
         self.cfg = config
         self.bars = {s: list(bars[s]) for s in config.symbols}
         self.macro = macro or MacroContext.unknown
         self.decide = decider  # injectable for engine tests; production uses baseline decide()
+        self.exit_check = exit_check  # strategy-driven exits at the bar close (e.g. rebalance)
+        self.financing = financing  # annual net rate of a position (swap), e.g. 0.012
         self.tf = timedelta(minutes=TIMEFRAME_MINUTES[config.strategy.timeframe])
         self.breaker = InMemoryBreaker()
-        self.risk = DefaultRiskEngine(config.limits, self.breaker, BacktestQuotes(),
-                                      mode="backtest")
+        self.risk = DefaultRiskEngine(
+            config.limits, self.breaker, BacktestQuotes(), mode="backtest",
+            config=RiskConfig(currency_exposure_mult=config.currency_exposure_mult))
         self.book = _Book(balance=config.initial_equity, day_start_equity=config.initial_equity)
         self.trades: list[ClosedTrade] = []
         self.daily: list[tuple[datetime, float]] = []
@@ -214,8 +242,15 @@ class Backtest:
             (bar.time, sym, i) for sym, bars in self.bars.items() for i, bar in enumerate(bars)
             if bar.time < self.cfg.end
         )
-        for _, sym, i in timeline:
-            self._on_bar(sym, i, snaps[sym][i])
+        # Bars that close at the same instant are processed in two passes: first every
+        # fill/exit, then every decision. Otherwise a symbol earlier in the alphabet
+        # could be refused a slot that a later symbol frees on that very bar.
+        for _, group in groupby(timeline, key=lambda item: item[0]):
+            batch = list(group)
+            for _, sym, i in batch:
+                self._update_positions(sym, i)
+            for _, sym, i in batch:
+                self._decide_at_close(sym, i, snaps[sym][i])
         self._close_all_at_end()
         return BacktestResult(
             config=self.cfg, trades=self.trades, daily_equity=self.daily,
@@ -226,19 +261,24 @@ class Backtest:
 
     # --- per bar ------------------------------------------------------------------------
 
-    def _on_bar(self, sym: str, i: int, snap: object) -> None:
+    def _update_positions(self, sym: str, i: int) -> None:
         bar = self.bars[sym][i]
         self.book.last_close[sym] = bar.close
         close_time = bar.time + self.tf
         self._roll_day(close_time)
         self._fill_pending(sym, bar)
         self._check_exit(sym, bar)
+        self._accrue(sym, close_time)
+        self._signal_exit(sym, bar, close_time)
+
+    def _decide_at_close(self, sym: str, i: int, snap: object) -> None:
+        bar = self.bars[sym][i]
         if bar.time < self.cfg.start:
             return
         self.bars_total += 1
         if sym in self.book.open:
             self.bars_in_market += 1
-        self._decide(sym, bar, close_time, snap)
+        self._decide(sym, bar, bar.time + self.tf, snap)
 
     def _roll_day(self, now: datetime) -> None:
         day = trading_day_start(now)
@@ -261,7 +301,7 @@ class Backtest:
         if bar.time != pending.expected_open:
             self.cancelled += 1  # gap after the signal bar: do not trade through it
             return
-        point = 1e-3 if sym.endswith("JPY") else 1e-5
+        point = point_size(sym)
         spread = self.cfg.costs.spread(sym) * point
         slip = self.cfg.costs.slippage() * point
         price = entry_price(pending.intent.side, bar.open, spread, slip)
@@ -272,7 +312,7 @@ class Backtest:
         pos = self.book.open.get(sym)
         if pos is None:
             return
-        point = 1e-3 if sym.endswith("JPY") else 1e-5
+        point = point_size(sym)
         spread = self.cfg.costs.spread(sym) * point
         hit = check_exit(pos.intent.side, pos.intent.stop_loss, pos.intent.take_profit, bar,
                          spread)
@@ -284,8 +324,35 @@ class Backtest:
             hit = Exit(hit.price + sign * slip, hit.reason)
         self._close(sym, hit, bar.time + self.tf)
 
+    def _accrue(self, sym: str, until: datetime) -> None:
+        """Swap/financing for each calendar day the position stayed open."""
+        pos = self.book.open.get(sym)
+        if pos is None or self.financing is None:
+            return
+        since = pos.accrued_to or pos.entry_time
+        days = (until - since).total_seconds() / 86_400
+        rate = self.financing(sym, pos.intent.side, until)
+        if days > 0 and rate is not None:
+            notional = notional_usd(sym, pos.intent.volume, self.book.last_close[sym])
+            pos.swap += notional * rate * days / 365
+        pos.accrued_to = until
+
+    def _signal_exit(self, sym: str, bar: Bar, close_time: datetime) -> None:
+        pos = self.book.open.get(sym)
+        if pos is None or self.exit_check is None:
+            return
+        if not self.exit_check(sym, bar, pos.intent.side):
+            return
+        point = point_size(sym)
+        slip = self.cfg.costs.slippage() * point
+        if pos.intent.side == "buy":  # sell at the bid
+            price = bar.close - slip
+        else:  # buy back at the ask
+            price = bar.close + self.cfg.costs.spread(sym) * point + slip
+        self._close(sym, Exit(price, "signal_exit"), close_time)
+
     def _decide(self, sym: str, bar: Bar, close_time: datetime, snap: object) -> None:
-        point = 1e-3 if sym.endswith("JPY") else 1e-5
+        point = point_size(sym)
         spread_pts = self.cfg.costs.spread(sym)
         tick = Tick(time=close_time + timedelta(seconds=2), bid=bar.close,
                     ask=bar.close + spread_pts * point, spread_points=round(spread_pts))
@@ -307,10 +374,12 @@ class Backtest:
     # --- book keeping -------------------------------------------------------------------
 
     def _close(self, sym: str, hit: Exit, when: datetime) -> None:
+        self._accrue(sym, when)  # financing up to the exit, also for stop exits
         pos = self.book.open.pop(sym)
         i = pos.intent
         pnl = pnl_money(sym, i.side, i.volume, pos.entry, hit.price)
         pnl -= self.cfg.costs.commission(i.volume)
+        pnl += pos.swap
         self.book.balance += pnl
         self.book.realized_today += pnl
         self.book.consecutive_losses = self.book.consecutive_losses + 1 if pnl < 0 else 0
@@ -318,6 +387,7 @@ class Backtest:
             symbol=sym, side=i.side, signal_time=pos.signal_time, entry_time=pos.entry_time,
             entry_price=pos.entry, exit_time=when, exit_price=hit.price, volume=i.volume,
             risk_amount=i.risk_amount, pnl=round(pnl, 2), exit_reason=hit.reason,
+            swap=round(pos.swap, 2),
         ))
 
     def _close_all_at_end(self) -> None:

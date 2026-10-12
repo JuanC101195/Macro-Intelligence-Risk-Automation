@@ -16,7 +16,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DEFAULT_SPREADS: dict[str, int] = {"EURUSD": 12, "GBPUSD": 16, "USDJPY": 14}
+DEFAULT_SPREADS: dict[str, int] = {
+    "EURUSD": 12, "GBPUSD": 16, "USDJPY": 14,
+    # Added with ADR 0004 (fixed before running the carry tests).
+    "AUDUSD": 14, "NZDUSD": 18, "USDCAD": 18, "USDCHF": 16,
+}
 
 
 class CostModel(BaseModel):
