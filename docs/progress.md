@@ -11,6 +11,13 @@
 
 ## Registro
 
+### 2026-10-12 — vectorbt como laboratorio (ADR 0009) — rama `feat/vectorbt-lab`
+
+- vectorbt 1.1.2 (Apache 2.0 + Commons Clause) como extra opcional `research` en un `.venv-research` aparte; un test de arquitectura impide importarlo (ni numba ni sklearn) desde el paquete. CI no cambia.
+- **Prueba 1 — auditoría del motor: pasa.** GMM propio = scikit-learn hasta 1e-13. Motor propio contra `Portfolio.from_signals` en la ruptura H4 (11 instrumentos, costes en cero): todas las operaciones explicadas, la gran mayoría idénticas y el resto por cuatro convenciones documentadas en las que el motor propio es más prudente. **Ningún bug del motor**; los errores encontrados eran del script de auditoría.
+- **Prueba 2 — filtro de regímenes contra 200 filtros aleatorios: no pasa.** El GMM no supera el percentil 95 de los filtros al azar; casi toda la mejora frente al control también la logra un filtro aleatorio. Se abandona la línea de regímenes (pre-registrado).
+- Lección de método: toda mejora relativa (filtro, variante) se compara contra una versión aleatoria equivalente antes de interpretarla.
+
 ### 2026-10-12 — H-REGIME-1 (ADR 0008): ruptura H4 con filtro de regímenes GMM — rama `feat/regimes-gmm`
 
 - Pre-registro (ADR 0008) commiteado antes del código, con la profundidad H4 encontrada al descargar (índices desde 2012-08 → se opera desde 2014-08); código commiteado antes de las corridas.
