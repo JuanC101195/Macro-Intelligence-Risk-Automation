@@ -11,6 +11,22 @@
 
 ## Registro
 
+### 2026-10-11 — Fase 2 (MT5, solo lectura) — rama `feat/phase-2-mt5`
+
+Hecho:
+- `broker/mt5_client.py`: `Mt5Client` de solo lectura (cuenta, símbolos, ticks, velas cerradas, rango histórico, posiciones, `calc_margin`/`calc_profit`). El módulo `MetaTrader5` se inyecta para poder testear con un fake.
+- La vela en formación nunca se devuelve. Login siempre enmascarado. Errores sin credenciales.
+- Hora del servidor → UTC con diferencia **configurada** y verificación cruzada contra ticks frescos (detecta cambios de DST). **Bug encontrado por test y corregido:** deducir la diferencia solo con ticks aceptaba valores falsos con ticks viejos.
+- `broker/history.py`: descarga a Parquet + manifiesto con sha256 (reproducibilidad).
+- CLI: `trading-system mt5 check` (sale con código 2 si la cuenta no es demo; sugiere la diferencia horaria) y `trading-system data download`.
+- `tests/fixtures/fake_mt5.py`: MT5 simulado con hora de servidor UTC+3 y vela en formación. Test de integración real marcado `mt5` (excluido por defecto).
+- 130 tests en verde; ruff y mypy limpios. Contra el terminal real: falla limpio (`IPC timeout`) porque aún no hay cuenta demo.
+
+Pendiente de Fase 2:
+- Crear la cuenta demo (Juan), configurar `.env`, correr `trading-system mt5 check` y `pytest -m mt5`.
+- Descargar el histórico M15 de los 3 símbolos y verificar profundidad (Q3: ¿≥ 3 años + 12 meses de hold-out?).
+- Verificar si el broker conserva el `comment` (Q6) — se hace en la Fase 11 con órdenes demo.
+
 ### 2026-10-11 — Fase 1 (sprint 1)
 
 Hecho:
