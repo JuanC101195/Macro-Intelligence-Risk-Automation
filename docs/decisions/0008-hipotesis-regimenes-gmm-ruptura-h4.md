@@ -54,3 +54,7 @@ Se implementa en Python puro (el proyecto no depende de numpy ni de scikit-learn
 Puerta A de la ADR 0002 sin cambios, para cada versión. Lectura adicional (no decide nada): si la principal mejora claramente al control en profit factor y drawdown, el filtro aporta aunque no alcance la puerta.
 
 Si ninguna pasa: se descarta la familia de ruptura (D1 y H4) y se recomienda pasar a la Fase 7 antes de cualquier hipótesis nueva.
+
+## Resultado (2026-10-12)
+
+Ninguna de las dos versiones pasa la Puerta A. El control en H4 es negativo. La principal es levemente positiva y mejora al control en profit factor y drawdown, pero falla A4, A6, A7, A8 y A9 (la mitad de las vecinas son negativas). Se descartan ambas; detalle en `docs/progress.md` y en los reportes locales. Hold-out no usado.
