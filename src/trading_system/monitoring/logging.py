@@ -35,7 +35,7 @@ class SecretScrubber:
     def __call__(
         self, _logger: Any, _method: str, event_dict: MutableMapping[str, Any]
     ) -> MutableMapping[str, Any]:
-        for key in list(event_dict):
+        for key in event_dict:  # only values change, never the keys
             event_dict[key] = self._clean(key, event_dict[key])
         return event_dict
 

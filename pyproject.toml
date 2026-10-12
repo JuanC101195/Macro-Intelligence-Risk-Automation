@@ -37,6 +37,8 @@ packages = ["src/trading_system"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Import the package from src/ without installing it (CI does not build the project).
+pythonpath = ["src", "."]
 addopts = "-ra --strict-markers -m 'not mt5'"
 markers = [
     "mt5: integration tests that need a running MT5 demo terminal (excluded by default)",

@@ -122,40 +122,62 @@ def atr(
     return _wilder([v or 0.0 for v in tr], period, first=1)
 
 
+def _directional_movement(
+    highs: Sequence[float], lows: Sequence[float]
+) -> tuple[list[float], list[float]]:
+    n = len(highs)
+    plus_dm, minus_dm = [0.0] * n, [0.0] * n
+    for i in range(1, n):
+        up = highs[i] - highs[i - 1]
+        down = lows[i - 1] - lows[i]
+        plus_dm[i] = up if up > down and up > 0 else 0.0
+        minus_dm[i] = down if down > up and down > 0 else 0.0
+    return plus_dm, minus_dm
+
+
+def _wilder_sum(values: list[float], period: int) -> Series:
+    """Wilder running sum (not mean) of values[1:], as in Wilder's original ADX."""
+    n = len(values)
+    out: Series = [None] * n
+    if n - 1 < period:
+        return out
+    prev = sum(values[1:period + 1])
+    out[period] = prev
+    for i in range(period + 1, n):
+        prev = prev - prev / period + values[i]
+        out[i] = prev
+    return out
+
+
+def _smooth_sparse(values: list[float], index: list[int], n: int, period: int) -> Series:
+    """Wilder-smooth `values` (located at `index` positions) into a series of length n."""
+    out: Series = [None] * n
+    if len(values) < period:
+        return out
+    prev = sum(values[:period]) / period
+    out[index[period - 1]] = prev
+    for k in range(period, len(values)):
+        prev = (prev * (period - 1) + values[k]) / period
+        out[index[k]] = prev
+    return out
+
+
 def adx(
     highs: Sequence[float], lows: Sequence[float], closes: Sequence[float], period: int = 14
 ) -> tuple[Series, Series, Series]:
     """Returns (ADX, +DI, -DI). ADX needs 2*period bars before its first value."""
     _check_period(period)
     n = len(closes)
-    plus_dm = [0.0] * n
-    minus_dm = [0.0] * n
-    for i in range(1, n):
-        up = highs[i] - highs[i - 1]
-        down = lows[i - 1] - lows[i]
-        plus_dm[i] = up if up > down and up > 0 else 0.0
-        minus_dm[i] = down if down > up and down > 0 else 0.0
+    plus_dm, minus_dm = _directional_movement(highs, lows)
     tr = [v or 0.0 for v in true_range(highs, lows, closes)]
+    tr_s, pdm_s = _wilder_sum(tr, period), _wilder_sum(plus_dm, period)
+    mdm_s = _wilder_sum(minus_dm, period)
 
-    # Wilder sums (not means) for TR and DM, as in Wilder's original method.
-    def wilder_sum(values: list[float]) -> Series:
-        out: Series = [None] * n
-        if n - 1 < period:
-            return out
-        prev = sum(values[1:period + 1])
-        out[period] = prev
-        for i in range(period + 1, n):
-            prev = prev - prev / period + values[i]
-            out[i] = prev
-        return out
-
-    tr_s, pdm_s, mdm_s = wilder_sum(tr), wilder_sum(plus_dm), wilder_sum(minus_dm)
     plus_di: Series = [None] * n
     minus_di: Series = [None] * n
     dx: list[float] = []
     dx_index: list[int] = []
-    for i in range(n):
-        t, p, m = tr_s[i], pdm_s[i], mdm_s[i]
+    for i, (t, p, m) in enumerate(zip(tr_s, pdm_s, mdm_s, strict=True)):
         if t is None or p is None or m is None or t == 0:
             continue
         pdi, mdi = 100.0 * p / t, 100.0 * m / t
@@ -163,12 +185,4 @@ def adx(
         total = pdi + mdi
         dx.append(0.0 if total == 0 else 100.0 * abs(pdi - mdi) / total)
         dx_index.append(i)
-
-    adx_out: Series = [None] * n
-    if len(dx) >= period:
-        prev = sum(dx[:period]) / period
-        adx_out[dx_index[period - 1]] = prev
-        for k in range(period, len(dx)):
-            prev = (prev * (period - 1) + dx[k]) / period
-            adx_out[dx_index[k]] = prev
-    return adx_out, plus_di, minus_di
+    return _smooth_sparse(dx, dx_index, n, period), plus_di, minus_di

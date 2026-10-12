@@ -26,34 +26,45 @@ class MacroInputs:
     data_stale: bool
 
 
+def _band(
+    value: float | None, off_at: float, on_at: float, off_name: str, on_name: str
+) -> tuple[list[str], list[str]]:
+    """value >= off_at -> risk-off reason; value <= on_at -> risk-on reason."""
+    if value is None:
+        return [], []
+    if value >= off_at:
+        return [off_name], []
+    if value <= on_at:
+        return [], [on_name]
+    return [], []
+
+
+def _untrustworthy(x: MacroInputs) -> str | None:
+    if x.data_stale:
+        return "data_stale"
+    if x.source_health < MIN_SOURCE_HEALTH:
+        return f"source_health<{MIN_SOURCE_HEALTH}"
+    if x.vix is None:
+        return "vix_missing"
+    return None
+
+
 def classify(x: MacroInputs) -> tuple[RiskRegime, float, list[str]]:
     """Return (regime, confidence 0..1, reasons)."""
-    if x.data_stale:
-        return "unknown", 0.0, ["data_stale"]
-    if x.source_health < MIN_SOURCE_HEALTH:
-        return "unknown", 0.0, [f"source_health<{MIN_SOURCE_HEALTH}"]
-    if x.vix is None:
-        return "unknown", 0.0, ["vix_missing"]
+    problem = _untrustworthy(x)
+    if problem:
+        return "unknown", 0.0, [problem]
 
     off: list[str] = []
     on: list[str] = []
-
-    if x.vix >= 25:
-        off.append("vix>=25")
-    elif x.vix <= 16:
-        on.append("vix<=16")
-
-    if x.vix_change_pct is not None:
-        if x.vix_change_pct >= 10:
-            off.append("vix_change>=+10%")
-        elif x.vix_change_pct <= -5:
-            on.append("vix_change<=-5%")
-
-    if x.credit_spread is not None:
-        if x.credit_spread >= 5.0:
-            off.append("hy_spread>=5.0")
-        elif x.credit_spread <= 3.5:
-            on.append("hy_spread<=3.5")
+    for value, off_at, on_at, off_name, on_name in (
+        (x.vix, 25.0, 16.0, "vix>=25", "vix<=16"),
+        (x.vix_change_pct, 10.0, -5.0, "vix_change>=+10%", "vix_change<=-5%"),
+        (x.credit_spread, 5.0, 3.5, "hy_spread>=5.0", "hy_spread<=3.5"),
+    ):
+        o, n = _band(value, off_at, on_at, off_name, on_name)
+        off += o
+        on += n
 
     if x.gold_change_pct is not None and x.gold_change_pct >= 1.5:
         off.append("gold_change>=+1.5%")

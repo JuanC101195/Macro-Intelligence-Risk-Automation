@@ -53,15 +53,14 @@ def test_unsorted_bars_rejected(tmp_path: Path) -> None:
 
 
 def test_empty_range_raises(tmp_path: Path) -> None:
+    client = _client()
+    start, end = datetime(2020, 1, 1, tzinfo=UTC), datetime(2020, 1, 2, tzinfo=UTC)
     with pytest.raises(ValueError, match="no bars"):
-        history.download(
-            _client(), "EURUSD", Timeframe.M15, datetime(2020, 1, 1, tzinfo=UTC),
-            datetime(2020, 1, 2, tzinfo=UTC), tmp_path,
-        )
+        history.download(client, "EURUSD", Timeframe.M15, start, end, tmp_path)
 
 
 def test_naive_range_rejected() -> None:
+    client = _client()
+    start, end = datetime(2026, 10, 13), datetime(2026, 10, 14)  # noqa: DTZ001
     with pytest.raises(ValueError, match="timezone"):
-        _client().bars_range(
-            "EURUSD", Timeframe.M15, datetime(2026, 10, 13), datetime(2026, 10, 14)  # noqa: DTZ001
-        )
+        client.bars_range("EURUSD", Timeframe.M15, start, end)
