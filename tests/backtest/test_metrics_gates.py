@@ -92,6 +92,27 @@ def test_gate_a_failures(kwargs: dict[str, Any], failing: str) -> None:
     assert checks[failing] == "fail"
 
 
+def test_neighbours_keep_the_hypothesis_timeframe(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.fixtures.bars import random_walk
+    from trading_system.backtest import runner
+    from trading_system.domain import Timeframe
+    from trading_system.strategy.baseline import BaselineParams
+
+    seen: list[tuple[str, str]] = []
+
+    class Spy(runner.Backtest):  # type: ignore[misc,name-defined]
+        def run(self) -> Any:
+            seen.append((self.cfg.strategy.timeframe.value, self.cfg.strategy.version))
+            return super().run()
+
+    monkeypatch.setattr(runner, "Backtest", Spy)
+    bars = {"EURUSD": random_walk(700)}
+    params = BaselineParams(timeframe=Timeframe.H1, version="baseline-v001-h1")
+    runner.run_suite(bars, {"EURUSD": "x"}, params=params)
+    assert len(seen) == 3 + len(runner.NEIGHBOURS)
+    assert set(seen) == {("H1", "baseline-v001-h1")}
+
+
 def test_holdout_can_be_claimed_once(tmp_path: Path) -> None:
     marker = tmp_path / "holdout_used.json"
     gates.claim_holdout(marker, "cfg1")

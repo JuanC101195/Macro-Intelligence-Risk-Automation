@@ -11,6 +11,14 @@
 
 ## Registro
 
+### 2026-10-12 — Hipótesis: misma lógica en timeframes mayores — rama `feat/higher-timeframes`
+
+- Backtest con `--tf` (M15/H1/H4); cada timeframe es una hipótesis con versión propia (`baseline-v001-h1`, `-h4`) y su propio presupuesto de variantes. Las variantes vecinas (A9) heredan el timeframe (test añadido: antes se habrían evaluado en M15 sin aviso).
+- Datos: MetaQuotes-Demo tiene ~16 años de H1/H4 (desde 2010-09) en los tres pares; descargados con hash (locales).
+- Resultado: **ninguna de las dos pasa la Puerta A**. H1 se comporta como M15 (sin ventaja). H4 queda cerca del punto de equilibrio con pocas operaciones: no hay ventaja demostrable. Detalle en los reportes locales; hold-out no usado.
+- Conclusión: la familia "tendencia EMA + pullback RSI + MACD + ADX" no muestra ventaja en EURUSD/GBPUSD/USDJPY en ningún timeframe probado. Según la ADR 0002 se deja de ajustar esta familia (se gastaron 7 variantes en cada una de las 3 hipótesis) y se pivota.
+- Tentación registrada y descartada: USDJPY en H4 aislado se ve positivo, pero elegir un par después de ver los resultados es sesgo de selección; además son ~70 operaciones (estadísticamente insuficiente). Si se quisiera probar, tendría que ser una hipótesis nueva, escrita antes, y evaluada en datos que no se hayan mirado.
+
 ### 2026-10-12 — Fase 6 (backtesting) — rama `feat/phase-6-backtest`
 
 Hecho:

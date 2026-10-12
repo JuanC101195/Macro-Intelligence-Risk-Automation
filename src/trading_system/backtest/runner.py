@@ -24,6 +24,7 @@ from trading_system.backtest.metrics import compute
 from trading_system.backtest.walk_forward import add_months, rolling_windows, window_results
 from trading_system.broker.contracts import Bar
 from trading_system.broker.history import file_sha256, read_bars
+from trading_system.domain import Timeframe
 from trading_system.risk.contracts import RiskLimits
 from trading_system.strategy.baseline import BaselineParams
 
@@ -40,14 +41,14 @@ NEIGHBOURS: dict[str, dict[str, Any]] = {
 }
 
 
-def load_datasets(directory: Path, symbols: Sequence[str]
+def load_datasets(directory: Path, symbols: Sequence[str], timeframe: Timeframe = Timeframe.M15
                   ) -> tuple[dict[str, list[Bar]], dict[str, str]]:
     bars: dict[str, list[Bar]] = {}
     hashes: dict[str, str] = {}
     for sym in symbols:
-        files = sorted(directory.glob(f"{sym}_M15_*.parquet"))
+        files = sorted(directory.glob(f"{sym}_{timeframe.value}_*.parquet"))
         if not files:
-            raise FileNotFoundError(f"no M15 dataset for {sym} in {directory}")
+            raise FileNotFoundError(f"no {timeframe.value} dataset for {sym} in {directory}")
         bars[sym] = read_bars(files[-1])
         hashes[sym] = file_sha256(files[-1])
     return bars, hashes
@@ -68,17 +69,19 @@ def run_suite(
     bars: Mapping[str, Sequence[Bar]],
     hashes: Mapping[str, str],
     *,
+    params: BaselineParams | None = None,
     holdout: bool = False,
     neighbours: bool = True,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
+    params = params or BaselineParams()
     symbols = tuple(sorted(bars))
     cut = holdout_start(bars)
     first = max(b[0].time for b in bars.values())
     end = add_months(min(b[-1].time for b in bars.values()), 1) if holdout else cut
     start = cut if holdout else first
     base_cfg = BacktestConfig(symbols=symbols, start=start, end=end, limits=_limits(),
-                              data_hashes=dict(hashes),
+                              strategy=params, data_hashes=dict(hashes),
                               label="holdout" if holdout else "research")
 
     def run(cfg: BacktestConfig, name: str) -> tuple[dict[str, Any], Any]:
@@ -94,8 +97,9 @@ def run_suite(
     variant_exp: dict[str, float | None] = {}
     if neighbours and not holdout:
         for name, change in NEIGHBOURS.items():
-            params = BaselineParams(**change)
-            m, _ = run(base_cfg.model_copy(update={"strategy": params}), name)
+            # Neighbours inherit timeframe/version from the hypothesis under test.
+            variant = params.model_copy(update=change)
+            m, _ = run(base_cfg.model_copy(update={"strategy": variant}), name)
             variant_exp[name] = m["expectancy"]
 
     history_years = (cut - first).days / 365.25
@@ -112,7 +116,7 @@ def run_suite(
         "symbols": list(symbols),
         "data_hashes": dict(hashes),
         "costs": CostModel().model_dump(),
-        "strategy": BaselineParams().model_dump(mode="json"),
+        "strategy": params.model_dump(mode="json"),
         "metrics": {"costs_x1": base, "costs_x1.5": costs15, "costs_x2": costs20},
         "walk_forward": windows,
         "neighbours_expectancy": variant_exp,
