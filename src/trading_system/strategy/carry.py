@@ -129,7 +129,9 @@ class CarryStrategy:
         if not self.is_rebalance(symbol, bar):
             return False
         target = self.targets(bar.time + DAY).get(symbol)
-        wanted = None if target is None else ("buy" if target is Side.LONG else "sell")
+        if target is None:
+            return True  # no longer selected
+        wanted = "buy" if target is Side.LONG else "sell"
         return wanted != side
 
     def financing(self, symbol: str, side: BrokerSide, t: datetime) -> float | None:

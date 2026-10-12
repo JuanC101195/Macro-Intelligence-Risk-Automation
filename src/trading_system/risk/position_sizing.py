@@ -23,7 +23,7 @@ _EPS = 1e-9
 
 @dataclass(frozen=True)
 class SizingResult:
-    volume: float | None  # None = rejected
+    volume: float | None  # None when the trade is rejected
     risk_money_allowed: float
     risk_money_real: float  # loss at the stop with the final volume
     loss_per_lot: float

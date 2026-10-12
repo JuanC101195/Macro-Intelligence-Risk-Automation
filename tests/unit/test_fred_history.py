@@ -59,10 +59,11 @@ def test_fetch_skips_missing_values_and_hides_key() -> None:
             {"date": "2024-03-04", "value": "14.1"}, {"date": "2024-03-05", "value": "."}]})
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
-    obs = fh.fetch_series(fh.VIX, "secret-key-123", date(2024, 1, 1), client)
+    start = date(2024, 1, 1)
+    obs = fh.fetch_series(fh.VIX, "secret-key-123", start, client)
     assert obs == [(date(2024, 3, 4), 14.1)]
     with pytest.raises(RuntimeError) as exc:
-        fh.fetch_series("BAD", "secret-key-123", date(2024, 1, 1), client)
+        fh.fetch_series("BAD", "secret-key-123", start, client)
     assert "secret-key-123" not in str(exc.value)
 
 

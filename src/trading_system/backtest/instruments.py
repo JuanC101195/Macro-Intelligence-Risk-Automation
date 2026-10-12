@@ -7,6 +7,8 @@ quote and is converted at the pair's own price.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -23,19 +25,21 @@ class InstrumentInfo(BaseModel):
     base: str
     profit_currency: str
     leverage: int  # notional / margin
+    asset_class: Literal["fx", "metal", "index"]
 
 
 def _fx(symbol: str) -> InstrumentInfo:
     jpy = symbol.endswith("JPY")
     return InstrumentInfo(symbol=symbol, digits=3 if jpy else 5, point=1e-3 if jpy else 1e-5,
                           contract_size=100_000.0, volume_min=0.01, volume_step=0.01,
-                          base=symbol[:3], profit_currency=symbol[3:], leverage=100)
+                          base=symbol[:3], profit_currency=symbol[3:], leverage=100,
+                          asset_class="fx")
 
 
 def _index(symbol: str) -> InstrumentInfo:
     return InstrumentInfo(symbol=symbol, digits=2, point=0.01, contract_size=1.0,
                           volume_min=0.1, volume_step=0.1, base=symbol,
-                          profit_currency="USD", leverage=20)
+                          profit_currency="USD", leverage=20, asset_class="index")
 
 
 INSTRUMENTS: dict[str, InstrumentInfo] = {
@@ -43,10 +47,10 @@ INSTRUMENTS: dict[str, InstrumentInfo] = {
                            "USDCHF")},
     "XAUUSD": InstrumentInfo(symbol="XAUUSD", digits=2, point=0.01, contract_size=100.0,
                              volume_min=0.01, volume_step=0.01, base="XAU",
-                             profit_currency="USD", leverage=50),
+                             profit_currency="USD", leverage=50, asset_class="metal"),
     "XAGUSD": InstrumentInfo(symbol="XAGUSD", digits=3, point=0.001, contract_size=5_000.0,
                              volume_min=0.01, volume_step=0.01, base="XAG",
-                             profit_currency="USD", leverage=50),
+                             profit_currency="USD", leverage=50, asset_class="metal"),
     **{s: _index(s) for s in ("US500", "US30", "USTEC")},
 }
 
@@ -60,5 +64,4 @@ def info(symbol: str) -> InstrumentInfo:
 
 
 def is_fx(symbol: str) -> bool:
-    i = info(symbol)
-    return i.contract_size == 100_000.0 and len(symbol) == 6
+    return info(symbol).asset_class == "fx"
