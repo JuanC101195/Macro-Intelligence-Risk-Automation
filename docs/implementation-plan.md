@@ -119,6 +119,8 @@ Aceptación: tests de seguridad (`tests/safety/`): volumen nunca redondea hacia 
 | 6.4 | Reporte HTML/Markdown en `research/reports/` |
 | 6.5 | Walk-forward |
 | 6.6 | Sensibilidad a costes (×1, ×1.5, ×2) |
+| 6.7 | Hold-out de 12 meses reservado y bloqueado por código hasta la evaluación final (ADR 0002) |
+| 6.8 | Verificación automática de la Puerta A (A1–A10) en el reporte + registro de experimentos |
 
 Aceptación: mismo config + mismos datos ⇒ mismo reporte (hash); test de no look-ahead; resultados siempre con costes. **No se declara rentabilidad.**
 
@@ -149,7 +151,7 @@ Aceptación: tras reinicio del VPS todo vuelve solo; restauración de backup pro
 
 ## Fase 12 — Evaluación
 
-Checklist de `CLAUDE.md` §18 Fase 12 + auditoría del Security Auditor Agent. El paso a dinero real **no** es parte de este proyecto; requeriría una ADR nueva y una decisión explícita fuera del MVP.
+Checklist de `CLAUDE.md` §18 Fase 12 + Puertas B y C de la ADR 0002 + auditoría del Security Auditor Agent. El paso a dinero real **no** es parte de este proyecto; requeriría una ADR nueva y una decisión explícita fuera del MVP.
 
 ## Riesgos
 

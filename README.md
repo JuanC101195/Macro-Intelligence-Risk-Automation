@@ -32,7 +32,7 @@ ruff check . ; mypy
 | [`docs/model-policy.md`](docs/model-policy.md) | Validación y ciclo de vida de modelos ML |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | Fases, tareas, criterios de aceptación, primer sprint |
 | [`docs/progress.md`](docs/progress.md) | Bitácora |
-| [`docs/decisions/`](docs/decisions/) | ADRs |
+| [`docs/decisions/`](docs/decisions/) | ADRs (0002: criterios de éxito y de parada) |
 
 ## Alcance del MVP
 

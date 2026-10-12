@@ -2,7 +2,8 @@
 
 ## Estado actual
 
-- **Fase:** 1 — Configuración y estructura (en la rama `feat/phase-1-config`, pendiente de merge)
+- **Fase:** 1 completa (PR #1 mergeado, CI en verde). Siguiente: Fases 2 y 3.
+- **Criterios de éxito y parada:** fijados en ADR 0002 antes de ver resultados
 - **Modo live:** bloqueado por configuración y por tipos (`OrderIntent.mode` no admite `live`); cubierto por tests
 - **Conexión MT5:** ninguna
 - **Modelos entrenados:** ninguno
@@ -30,7 +31,12 @@ Criterios de aceptación de la Fase 1:
 - [x] Configuraciones ambiguas rechazadas, cada regla con test
 - [x] Ningún secreto en logs, CLI ni mensajes de error
 - [x] `pytest`, `ruff`, `mypy` en verde local
-- [ ] CI en verde en GitHub (se verifica al abrir el PR)
+- [x] CI en verde en GitHub (PR #1 y `main`)
+
+### 2026-10-11 — ADR 0002
+
+- Criterios de éxito (Puertas A, B, C) y de parada/pivote fijados antes de cualquier backtest.
+- Hold-out de 12 meses y presupuesto de 20 variantes por hipótesis.
 
 ### 2026-10-11 — Fase 0
 
