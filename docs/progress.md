@@ -11,6 +11,22 @@
 
 ## Registro
 
+### 2026-10-12 — Fase 4 (estrategia base `baseline-v001`) — rama `feat/phase-4-strategy`
+
+Hecho:
+- `strategy/indicators.py`: SMA, EMA, RSI, MACD, ATR, ADX con convención Wilder/TA-Lib; `None` durante el calentamiento. **RSI coincide exactamente con el ejemplo publicado de StockCharts** (70.53 … 37.77). EMA y ATR verificados a mano; ADX con propiedades (tendencia vs rango, primer valor en 2×periodo−1). Test de no look-ahead para todos.
+- `strategy/baseline.py`: reglas LONG/SHORT de `CLAUDE.md` §8 con umbrales fijos (EMA50/200, pullback RSI 40/60 en 5 velas, MACD, ADX ≥ 20); SL = 1.5×ATR desde ask/bid, TP = 2×SL; la estrategia no decide volumen. Hipótesis macro v001: risk_off bloquea LONG, risk_on bloquea SHORT; macro desconocido solo penaliza confianza (×0.8) salvo `MACRO_REQUIRED`.
+- `decide()` es una función pura; reporta **todos** los motivos de HOLD a la vez (datos insuficientes, vela no cerrada, datos obsoletos, indicadores sin calentar, spread, posición abierta, riesgo bloqueado, símbolo no operable, macro no disponible/contradictorio, short no permitido, sin setup con detalle de qué condición falló).
+- `strategy/features.py`: las 19 features técnicas de `CLAUDE.md` §9 por vela, sin look-ahead.
+- 223 tests en verde; ruff y mypy limpios. `TIMEFRAME_MINUTES` movido a `domain.py`.
+
+Censo de señales en datos reales (no es backtest: sin P&L ni costos; 1 de cada 4 velas del último año, spread fijo de 10 puntos, macro `unknown`): ~0.25 % de las velas dan señal, LONG y SHORT balanceados en los tres pares (≈110–160 señales/año/par). Frecuencia compatible con el mínimo de 300 operaciones OOS de la ADR 0002.
+
+Criterios de aceptación de la Fase 4:
+- [x] Cada condición de HOLD tiene un test
+- [x] Estrategia determinista (mismo input → misma señal)
+- [x] Sin look-ahead (test de prefijos en indicadores y features)
+
 ### 2026-10-12 — Grabación macro 24/7 en Azure for Students
 
 - VM `vm-itp-macro` (Spain Central, B2ats v2, sin puertos de entrada) con Docker Compose: Crucix (commit revisado, sin puertos publicados) + grabador. Detalles y comandos en `docs/operations.md`.
