@@ -54,6 +54,17 @@ Todo se calcula al cierre de cada vela H1 con **solo datos pasados** (walk-forwa
 
 Umbral de entrada 1.5 / 2.5; ventana del z-score 120 / 480 velas; ventana de β 500 / 2 000 velas; sin filtro de cointegración.
 
+## Adenda 2026-10-12 — detalles de implementación (registrada antes de escribir el código)
+
+Puntos que el texto anterior no fijaba; ninguno cambia las reglas de entrada, salida o umbrales:
+
+1. **Prueba de cointegración:** regresión OLS **con constante** en la ventana de 1 000 velas; ADF sobre los residuos **sin constante y con 1 rezago fijo** de Δe (sin selección automática). "p < 0.05" equivale a que el estadístico t sea menor que el valor crítico de MacKinnon (2010) al 5 % para 2 variables con constante (≈ −3.34 con 1 000 observaciones). Se implementa en Python puro: el proyecto no depende de numpy ni de statsmodels.
+2. **Diferencial y z:** el diferencial de las últimas 240 velas se recalcula con el β vigente (el de la última reestimación), y el z es el de la vela actual dentro de esa ventana.
+3. **Velas comunes:** solo se decide y se evalúan las salidas en horas en que **ambos** pares tienen vela. El stop por tiempo cuenta velas comunes. Si en la apertura de ejecución falta la vela de una pata, se cancelan las dos.
+4. **Salidas por z o por tiempo:** se ejecutan al cierre de la vela que las dispara (como las salidas por señal del motor: bid/ask con spread y slippage); el stop de protección de una pata se ejecuta dentro de la vela, y la otra pata se cierra en la apertura de su vela siguiente.
+5. **Escalado de las patas:** si con el tamaño objetivo una pata arriesga más del límite por operación (0.25 %) hasta su stop de protección, **el par completo se reduce en proporción** (se conserva la cobertura). Volúmenes redondeados hacia abajo a 0.01; si una pata queda por debajo de 0.01, no se opera.
+6. **Límites del gestor:** como la ADR 0004 (3 posiciones, 10 operaciones/día, 5 pérdidas consecutivas, pérdida diaria 2 %). La racha de pérdidas consecutivas se cuenta **por par** (P&L neto del par), no por pata: casi siempre una pata pierde aunque el par gane.
+
 ## Criterio de éxito
 
 Puerta A de la ADR 0002 sin cambios (salvo la definición de operación de arriba). Si falla, se descarta `pairs-v001`, no se prueban otros pares de divisas elegidos a posteriori y se pasa a la siguiente idea acordada (regímenes con mezclas gaussianas) o a la Fase 7.
