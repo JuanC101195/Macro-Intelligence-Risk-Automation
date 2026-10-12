@@ -11,6 +11,14 @@
 
 ## Registro
 
+### 2026-10-12 — Capital real (ADR 0005) y H-BREAKOUT-1 (ADR 0006) — rama `feat/breakout`
+
+- **ADR 0005:** el capital real futuro es 100 000–700 000 COP (≈ 25–175 USD). Solo es operable en cuenta cent; los backtests nuevos simulan el equivalente (17 500 con lotes estándar). Metas realistas: 10–25 % anual con drawdown ≤ 10 %; "100 USD/semana" con ese capital no es alcanzable y no se perseguirá.
+- **ADR 0006 (pre-registrada antes del código):** ruptura de canal Donchian 55/20, stop 2 × ATR, D1, metales (XAUUSD, XAGUSD), índices (US500, US30) y 7 pares FX, máximo 3 posiciones. Adendas antes de correr: USTEC excluido (historia solo desde 2022-07); take-profit no vinculante de los SHORT con piso del 10 % del precio (podía ser negativo).
+- Implementado: registro de instrumentos con specs de MT5 (`backtest/instruments.py`), P&L/margen por instrumento, slippage por símbolo, financiación por clase de activo (`backtest/financing.py`), `strategy/breakout.py`, comando `backtest breakout`.
+- Resultado (2012-08 → 2025-10): **no pasa la Puerta A**; levemente negativo, vecinas negativas. Con el capital equivalente a la cuenta cent, oro y plata casi no se pudieron operar (lote mínimo) y los límites de 3 posiciones / exposición USD 1× impiden la diversificación que el trend following necesita. Hold-out no usado.
+- Balance de investigación: **7 hipótesis probadas** (baseline M15/H1/H4, filtro macro block/confirm, carry, ruptura multi-activo), **ninguna pasa la Puerta A**.
+
 ### 2026-10-12 — H-CARRY-1 (ADR 0004): carry de divisas — rama `feat/carry`
 
 - Pre-registro (ADR 0004) commiteado antes del código; código commiteado antes de cada corrida.

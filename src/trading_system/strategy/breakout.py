@@ -82,8 +82,10 @@ class BreakoutStrategy:
             return Side.SHORT
         return None
 
-    def decide(self, snap: Any, last_bar: Bar | None, tick: Tick, spec: SymbolSpec,
-               macro: MacroContext, state: MarketState, p: Any, symbol: str) -> Signal:
+    def decide(self, _snap: Any, last_bar: Bar | None, tick: Tick, spec: SymbolSpec,
+               macro: MacroContext, state: MarketState, _params: Any, symbol: str
+               ) -> Signal:
+        """Engine decider hook (positional call); snapshot/params are unused here."""
         assert last_bar is not None
         common: dict[str, Any] = {
             "signal_id": f"{self.params.version}-{symbol}-{last_bar.time:%Y%m%d}",
