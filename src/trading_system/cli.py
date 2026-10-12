@@ -281,6 +281,22 @@ def backtest_breakout(
     _write_report(result, out)
 
 
+@backtest_app.command("pairs")
+def backtest_pairs(
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+) -> None:
+    """Run pairs-v001 (ADR 0007): AUDUSD-NZDUSD statistical arbitrage on H1."""
+    from trading_system.backtest import runner
+
+    bars, hashes = runner.load_datasets(data, ["AUDUSD", "NZDUSD"], Timeframe.H1)
+    result = runner.run_pairs_suite(
+        bars, hashes, _load_rates(data), neighbours=neighbours,
+        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    _write_report(result, out)
+
+
 @backtest_app.command("run")
 def backtest_run(
     symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",

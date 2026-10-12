@@ -11,6 +11,16 @@
 
 ## Registro
 
+### 2026-10-12 — H-PAIRS-1 (ADR 0007): arbitraje estadístico AUDUSD–NZDUSD — rama `feat/pairs-aud-nzd`
+
+- Pre-registro (ADR 0007) y adenda de implementación (ADF con 1 rezago y valor crítico de MacKinnon, escalado proporcional de las patas, racha de pérdidas por par) commiteados **antes** del código; código commiteado antes de la corrida.
+- Datos: AUDUSD y NZDUSD en H1 desde 2010-09 (descargados con hash, locales).
+- Implementado: `strategy/pairs.py` (OLS, ADF y z-score en Python puro, solo con datos pasados), `backtest/pairs_engine.py` (motor de dos patas: decisión solo en horas comunes, todo o nada en la aprobación y en el fill, la pata huérfana se cierra en la apertura siguiente sin look-ahead, una operación = un par), `risk_fraction` opcional en el gestor de riesgo (solo puede **bajar** el riesgo por operación), comando `backtest pairs`. 21 tests nuevos (precios calculados a mano); 378 en verde.
+- Resultado: **no pasa la Puerta A**. Negativa con costes ×1, muy pocas operaciones (falla A2: el filtro de cointegración bloquea la mayoría de las señales) y **las 7 vecinas también negativas**. Hold-out no usado.
+- Revisión del resultado (regla 3): (1) la mayoría de los pares sale por el **stop de protección de una pata** (4 × ATR H1): las dos monedas se mueven juntas frente al USD y la pata perdedora toca su stop aunque el diferencial siga sano; es la regla pre-registrada, no un bug, pero convierte el par en dos apuestas direccionales. (2) Hueco en la regla de entrada: sin tope superior, con |z| ≥ 4 el sistema entraba y salía en la vela siguiente por el stop del diferencial; afecta a una fracción pequeña de operaciones y quitarlas no cambia la conclusión.
+- Tentación registrada y descartada: "con stops de pata más amplios y entrada acotada a 2 ≤ |z| < 4 funcionaría". Sería ajustar la regla a los datos ya vistos; si se prueba, es una hipótesis nueva con su ADR y sin reutilizar este periodo como evidencia.
+- Balance: **8 hipótesis probadas, ninguna pasa la Puerta A**. Según la ADR 0007 no se prueban otros pares de divisas elegidos a posteriori.
+
 ### 2026-10-12 — Capital real (ADR 0005) y H-BREAKOUT-1 (ADR 0006) — rama `feat/breakout`
 
 - **ADR 0005:** el capital real futuro es 100 000–700 000 COP (≈ 25–175 USD). Solo es operable en cuenta cent; los backtests nuevos simulan el equivalente (17 500 con lotes estándar). Metas realistas: 10–25 % anual con drawdown ≤ 10 %; "100 USD/semana" con ese capital no es alcanzable y no se perseguirá.

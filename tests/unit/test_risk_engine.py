@@ -240,3 +240,20 @@ def test_engine_cannot_emit_live_intents(breaker: FileCircuitBreaker) -> None:
     sig, acc, sp, exp = long_signal(), account(), spec(), exposure()
     with pytest.raises(ValidationError, match="mode"):
         live_engine.evaluate(sig, acc, sp, TICK, exp)
+
+
+class TestRiskFraction:
+    """Pair legs (ADR 0007) may ask for less than the per-trade limit, never more."""
+
+    def test_smaller_fraction_sizes_down(self, breaker: FileCircuitBreaker) -> None:
+        d = engine(breaker).evaluate(long_signal(), account(), spec(), TICK, exposure(),
+                                     risk_fraction=0.00125)
+        assert d.approved
+        assert d.intent.volume == 0.06  # half of the 0.12 lots at the full 0.25 %
+
+    @pytest.mark.parametrize("fraction", [0.0, -0.001, 0.0026])
+    def test_out_of_range_is_rejected(self, breaker: FileCircuitBreaker, fraction: float) -> None:
+        d = engine(breaker).evaluate(long_signal(), account(), spec(), TICK, exposure(),
+                                     risk_fraction=fraction)
+        assert not d.approved
+        assert d.rejections == ("risk_fraction_out_of_range",)

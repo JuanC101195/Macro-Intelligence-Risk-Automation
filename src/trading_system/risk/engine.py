@@ -65,7 +65,12 @@ class DefaultRiskEngine:
         spec: SymbolSpec,
         tick: Tick,
         exposure: ExposureSnapshot,
+        risk_fraction: float | None = None,
     ) -> RiskDecision:
+        """`risk_fraction` lets a strategy ask for LESS than max_risk_per_trade (e.g. the
+        legs of a hedged pair); it can never raise the limit."""
+        if risk_fraction is not None and not 0 < risk_fraction <= self._limits.max_risk_per_trade:
+            return _reject(["risk_fraction_out_of_range"])
         rejections = self._gate(signal, account, spec, tick, exposure)
         if rejections:
             return _reject(rejections)
@@ -80,7 +85,7 @@ class DefaultRiskEngine:
         rejections = self._tick_value_check(order, spec, broker_loss_per_lot)
         if rejections:
             return _reject(rejections)
-        sizing = size_position(account.equity, self._limits.max_risk_per_trade,
+        sizing = size_position(account.equity, risk_fraction or self._limits.max_risk_per_trade,
                                order.entry, order.stop, spec,
                                min_loss_per_lot=broker_loss_per_lot)
         if sizing.volume is None:
