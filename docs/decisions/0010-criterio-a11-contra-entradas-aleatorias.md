@@ -53,6 +53,24 @@ Corrección (antes de cualquier nueva corrida):
 
 Además: la corrida base de `baseline-v001-h4` no reproduce el digest registrado a las 03:45 UTC del 2026-10-12 (PF 0.965 frente a 0.970). Con el código de `main`, sin A11, sale el **mismo** digest nuevo (`f14bc57…`), así que la diferencia viene de cambios posteriores al registro (especificaciones por instrumento y costes por símbolo, commit `9daeac0`, que cambió el fingerprint de configuración), no de A11. Las demás corridas base reproducen su registro.
 
+## Resultado de la aplicación retroactiva (2026-10-12) — ninguna supera al azar
+
+Con el nulo calibrado de la adenda, 200 versiones por hipótesis, configuración base, costes ×1 (los valores concretos quedan en los reportes locales):
+
+| # | Hipótesis | ¿Supera el percentil 95? |
+|---|---|---|
+| 1 | baseline M15 | no |
+| 2 | baseline H1 | no |
+| 3 | baseline H4 | no |
+| 4 | baseline H1 + filtro macro *block* | no |
+| 5 | baseline H1 + filtro macro *confirm* | no |
+| 6 | carry D1 | no |
+| 7 | ruptura D1 | no |
+| 9 | ruptura H4 (control) | no |
+| 10 | ruptura H4 + regímenes GMM | no (con el nulo sin calibrar "pasaba" por 0.0003: era el sesgo descrito en la adenda) |
+
+Ninguna estrategia probada hasta hoy tiene entradas mejores que el azar con su misma gestión. Las corridas base de ruptura, carry y regímenes reproducen su digest registrado. Las cuatro de baseline (M15, H1, H1 *block*, H1 *confirm*) no lo reproducen por la misma causa que H4: los costes por símbolo cambiaron después del registro (`9daeac0`), y en H4 se comprobó con el código de `main` que A11 no altera la corrida.
+
 ## Consecuencias
 
 - Toda hipótesis nueva paga ~200 corridas extra de backtest (en H4, ~13 min con todos los núcleos).
