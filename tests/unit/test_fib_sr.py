@@ -57,13 +57,17 @@ def test_zones_group_touches_within_tolerance() -> None:
 
 @pytest.mark.parametrize(("prev", "bar", "short", "expected"), [
     ((10, 11, 9.9, 10.8), (10.9, 11.0, 9.5, 9.8), True, True),   # bearish engulfing
-    ((10, 10.2, 9.9, 10.1), (10.0, 11.0, 9.9, 10.05), True, True),  # long upper wick
+    ((10, 10.2, 9.9, 10.15), (10.1, 11.0, 9.9, 10.0), True, True),  # full-size bearish pin
+    ((10, 10.2, 9.9, 10.1), (10.0, 11.0, 9.9, 10.05), True, False),  # pin closing up (ADR 0012)
     ((10, 10.2, 9.9, 10.1), (10.0, 10.3, 9.0, 10.25), True, False),  # wick on the wrong side
     ((10.8, 11, 9.9, 10.0), (9.9, 11.0, 9.9, 10.9), False, True),  # bullish engulfing
+    ((10.05, 10.1, 9.9, 10.0), (9.98, 10.2, 9.95, 10.1), False, False),  # engulfs a doji
+    ((10, 10.2, 9.9, 10.15), (10.1, 10.25, 10.0, 10.05), True, False),  # pin too small
 ])
 def test_trigger_candles(prev: tuple[float, ...], bar: tuple[float, ...], short: bool,
                          expected: bool) -> None:
-    assert fib_sr._trigger(_bar(*prev), _bar(*bar, i=1), short, 2.0) is expected
+    atr = 1.0  # rejection range >= 1.0, engulfed body >= 0.3
+    assert fib_sr._trigger(_bar(*prev), _bar(*bar, i=1), short, TEST_PARAMS, atr) is expected
 
 
 def test_stop_locks_half_r_at_one_r_then_trails() -> None:

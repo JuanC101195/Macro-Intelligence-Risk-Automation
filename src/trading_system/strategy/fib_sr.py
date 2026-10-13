@@ -1,12 +1,14 @@
 """Fibonacci retracement + support/resistance on gold, H1 analysis and M5 entry.
 
-`fibsr-xau-v001` (ADR 0011), a partner's discretionary method turned into rules:
+`fibsr-xau-v002` (ADR 0011 and 0012), a partner's discretionary method turned into rules:
 - H1 swings (ZigZag of k x ATR) give the trend (two lower highs and lows, or higher)
   and the last leg; M5 swings of the last 24 h must show the same trend.
 - Entry band: 50 %-61.8 % retracement of a leg of at least 10 x ATR(H1), overlapping a
   horizontal zone (>= 2 wick fractals) or a diagonal line (>= 3 touches) of the last
   week of H1 bars, on the correct side (resistance to sell, support to buy).
-- Trigger: an M5 engulfing or long-wick rejection candle with the trend inside the band.
+- Trigger: an M5 engulfing of a real-bodied candle, or a full-size long-wick rejection that
+  closes with the trade, after at least one M5 close inside the band (ADR 0012). The M5
+  trend and the support/resistance confluence can be switched off (walk-forward variants).
 - Stop at 78.6 %, target at 0 %; at +1 R the stop locks +0.5 R, then trails behind each
   new confirmed M5 swing.
 Everything is precomputed once; no value uses a bar that had not closed (an H1 bar is
@@ -39,7 +41,7 @@ M5 = timedelta(minutes=5)
 class FibSrParams(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: str = "fibsr-xau-v001"
+    version: str = "fibsr-xau-v002"
     timeframe: Timeframe = Timeframe.M5
     atr_period: int = 14
     zigzag_atr: float = Field(default=4.0, gt=0)  # H1 swings
@@ -56,6 +58,10 @@ class FibSrParams(BaseModel):
     line_min_gap: int = 10
     m5_trend_bars: int = 288  # 24 h of M5 bars
     pin_wick_body: float = 2.0
+    pin_min_range_atr: float = 1.0  # ADR 0012: a rejection candle of normal M5 size
+    engulf_min_body_atr: float = 0.3  # ADR 0012: the engulfed candle has a real body
+    m5_trend_required: bool = True
+    sr_required: bool = True
     lock_at_r: float = 1.0
     lock_r: float = 0.5
 
@@ -178,6 +184,8 @@ class FibSrStrategy:
 
         j = -1
         hour_hi, hour_lo = float("-inf"), float("inf")
+        leg_key: tuple[datetime, datetime] | None = None
+        band_closed = False  # an M5 close inside the band since the leg became known
         for i, bar in enumerate(m5):
             close_t = bar.time + M5
             moved = False
@@ -189,18 +197,25 @@ class FibSrStrategy:
             hour_hi, hour_lo = max(hour_hi, bar.high), min(hour_lo, bar.low)
             if j < 0:
                 continue
-            setup, reason = self._setup_at(ctx, j, i, m5, m_piv, m_conf, hour_hi, hour_lo)
+            leg = ctx.leg(j)
+            key = None if leg is None else (leg.start_time, leg.end_time)
+            if key != leg_key:
+                leg_key, band_closed = key, False
+            if leg is not None and leg.band_lo <= bar.close <= leg.band_hi:
+                band_closed = True
+            setup, reason = self._setup_at(ctx, leg, j, i, m5, m_atr[i], m_piv, m_conf,
+                                           (hour_hi, hour_lo), band_closed)
             if setup is not None:
                 self._setups[(sym, bar.time)] = setup
             elif reason:
                 self.hold_counts[reason] += 1
 
-    def _setup_at(self, ctx: _H1Context, j: int, i: int, m5: Sequence[Bar],
-                  m_piv: Sequence[Pivot], m_conf: array[int], hour_hi: float,
-                  hour_lo: float) -> tuple[Setup | None, str]:
-        leg = ctx.leg(j)
+    def _setup_at(self, ctx: _H1Context, leg: Leg | None, j: int, i: int, m5: Sequence[Bar],
+                  m5_atr: float | None, m_piv: Sequence[Pivot], m_conf: array[int],
+                  hour: tuple[float, float], band_closed: bool) -> tuple[Setup | None, str]:
         if leg is None:
             return None, ""
+        hour_hi, hour_lo = hour
         short = leg.side is Side.SHORT
         # Invalidated within the current hour: beyond 78.6 % or a new extreme past 0 %.
         if short:
@@ -210,14 +225,20 @@ class FibSrStrategy:
         if invalid:
             return None, "leg_invalidated"
         bar = m5[i]
-        if not _in_band(bar, leg, short) or i == 0 or not _trigger(m5[i - 1], bar, short,
-                                                                   self.params.pin_wick_body):
+        p = self.params
+        if not _in_band(bar, leg, short) or i == 0 or m5_atr is None \
+                or not _trigger(m5[i - 1], bar, short, p, m5_atr):
             return None, ""
-        if _m5_trend(m_piv, m_conf, i, self.params.m5_trend_bars) != (-1 if short else 1):
+        if not band_closed:
+            return None, "band_not_closed_in"
+        if p.m5_trend_required and \
+                _m5_trend(m_piv, m_conf, i, p.m5_trend_bars) != (-1 if short else 1):
             return None, "m5_trend_disagrees"
         level = ctx.confluence(j, leg)
         if level is None:
-            return None, "no_support_resistance"
+            if p.sr_required:
+                return None, "no_support_resistance"
+            level = "none"
         return Setup(leg.side, leg.stop, leg.target, leg, level), ""
 
     # --- engine hooks ------------------------------------------------------------------
@@ -282,22 +303,25 @@ def _in_band(bar: Bar, leg: Leg, short: bool) -> bool:
     return bar.low <= leg.band_hi and bar.close > leg.stop and bar.close < leg.target
 
 
-def _trigger(prev: Bar, bar: Bar, short: bool, wick_body: float) -> bool:
+def _trigger(prev: Bar, bar: Bar, short: bool, p: FibSrParams, atr: float) -> bool:
+    """Engulfing of a real-bodied candle, or a full-size rejection closing with the trade."""
     body = abs(bar.close - bar.open)
     rng = bar.high - bar.low
+    big_prev = abs(prev.close - prev.open) >= p.engulf_min_body_atr * atr
+    full_size = rng >= p.pin_min_range_atr * atr
     if short:
         engulf = prev.close > prev.open and bar.close < bar.open \
             and bar.open >= prev.close and bar.close <= prev.open
         wick = bar.high - max(bar.open, bar.close)
-        pin = rng > 0 and wick >= wick_body * body and wick >= 0.5 * rng \
+        pin = bar.close < bar.open and wick >= p.pin_wick_body * body and wick >= 0.5 * rng \
             and bar.close <= (bar.high + bar.low) / 2
     else:
         engulf = prev.close < prev.open and bar.close > bar.open \
             and bar.open <= prev.close and bar.close >= prev.open
         wick = min(bar.open, bar.close) - bar.low
-        pin = rng > 0 and wick >= wick_body * body and wick >= 0.5 * rng \
+        pin = bar.close > bar.open and wick >= p.pin_wick_body * body and wick >= 0.5 * rng \
             and bar.close >= (bar.high + bar.low) / 2
-    return engulf or pin
+    return (engulf and big_prev) or (pin and full_size)
 
 
 def _m5_trend(pivots: Sequence[Pivot], confirms: array[int], i: int, window: int) -> int:

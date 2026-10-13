@@ -60,6 +60,16 @@ class Signal(BaseModel):
         return self
 
 
+def as_hold(signal: Signal, reason: str) -> Signal:
+    """The same signal turned into a HOLD (wrappers that veto an entry keep its context)."""
+    if signal.side is Side.HOLD:
+        return signal
+    data = signal.model_dump()
+    data.update(side=Side.HOLD, confidence=0.0, reasons=(), hold_reasons=(reason,),
+                entry_ref=None, stop_loss=None, take_profit=None)
+    return Signal(**data)
+
+
 class Strategy(Protocol):
     version: str
 

@@ -111,6 +111,7 @@ def evaluate_suite(
     holdout: bool = False,
     neighbours: bool = True,
     null_runs: int = 0,
+    null_workers: int | None = None,  # cap for memory-heavy datasets (ADR 0011 addendum)
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """Costs x1/x1.5/x2, walk-forward, neighbour variants and Gate A for any strategy.
@@ -146,7 +147,7 @@ def evaluate_suite(
         progress(f"{null_runs} random-entry versions (ADR 0010)")
         profile = recorder.profile(base_result.trades, base_bt.tf)
         runs = null_model.run_null(build(base_cfg, None), profile, recorder.atr,
-                                   range(null_runs))
+                                   range(null_runs), null_workers)
         null = null_model.summarize(base, runs, profile)
     costs15, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(1.5)}), None,
                      "costs x1.5")
