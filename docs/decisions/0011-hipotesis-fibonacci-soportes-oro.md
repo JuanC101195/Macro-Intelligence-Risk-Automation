@@ -79,6 +79,12 @@ Descarga hecha: XAUUSD H1 (129 884 velas) y M5 (1 499 333 velas), ambos desde ju
 1. El periodo de investigación empieza el **2016-01-01** en M5 (H1 desde 2015-07-01 para calentar ATR, ZigZag y fractales). Quedan ~9.8 años antes del hold-out, muy por encima de A1. El corte se fija sin haber corrido nada y no se mueve después.
 2. El modelo nulo de esta hipótesis usa como máximo **4 procesos**.
 
+## Adenda 2026-10-12 — muestra de la validación (sin backtest)
+
+Contando solo señales (sin simular operaciones), las reglas dan 403 señales entre 2016 y el hold-out, pero salen de solo **40 tramos distintos** (≈ 4 por año): una misma vela-gatillo se repite en velas M5 seguidas del mismo tramo. La revisión del socio usa por eso **la primera señal de cada tramo distinto** (10 primeros, en orden cronológico), no las 10 primeras señales. Las reglas de la estrategia no cambian.
+
+Con ≈ 4 tramos por año, A2 (≥ 300 operaciones) no puede cumplirse. Antes de cualquier backtest se pregunta al socio cuántas operaciones hace por semana: si son bastantes más, la traducción es más estricta que su criterio (el filtro que más descarta es la confirmación de tendencia en M5: 2 780 señales) y se corrige con una adenda, sin haber mirado resultados.
+
 ## Consecuencias
 
 - El motor necesita dos cosas nuevas: contexto H1 dentro de una estrategia que decide en M5 (sin mirar el futuro) y stops que se mueven durante la operación. Se implementan con tests de mecánica antes de la corrida.
