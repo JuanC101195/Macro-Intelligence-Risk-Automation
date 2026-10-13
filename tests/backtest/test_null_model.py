@@ -28,18 +28,23 @@ def _setup() -> tuple[dict[str, Any], Backtest]:
     return bars, Backtest(cfg, bars, decider=strategy.decide, exit_check=strategy.exit_check)
 
 
-def _recorded() -> tuple[Any, null_model.ProfileRecorder, Backtest]:
+Recorded = tuple[Any, dict[str, null_model.SymbolProfile], null_model.AtrMap, Backtest]
+
+
+def _recorded() -> Recorded:
+    """(base result, executed-entry profile, ATR map, fresh unrun template)."""
     bars, bt = _setup()
     recorder = null_model.ProfileRecorder(bt.decide, null_model.atr_by_bar(bars))
     bt.decide = recorder
-    return bt.run(), recorder, _setup()[1]
+    result = bt.run()
+    return result, recorder.profile(result.trades, bt.tf), recorder.atr, _setup()[1]
 
 
 def test_recorder_does_not_change_the_base_run() -> None:
     _, plain = _setup()
-    recorded, recorder, _ = _recorded()
+    recorded, profile, _, _ = _recorded()
     assert recorded.digest() == plain.run().digest()
-    prof = recorder.profile["EURUSD"]
+    prof = profile["EURUSD"]
     assert prof.entries > 0
     assert prof.flat_calls > prof.entries
     assert 0 < prof.long_share < 1
@@ -47,11 +52,10 @@ def test_recorder_does_not_change_the_base_run() -> None:
 
 
 def test_random_entries_are_reproducible_and_seed_dependent() -> None:
-    _, recorder, template = _recorded()
-    atr = recorder.atr
-    first = null_model.run_seed(template, recorder.profile, atr, seed=1)
-    again = null_model.run_seed(template, recorder.profile, atr, seed=1)
-    other = null_model.run_seed(template, recorder.profile, atr, seed=2)
+    _, profile, atr, template = _recorded()
+    first = null_model.run_seed(template, profile, atr, seed=1)
+    again = null_model.run_seed(template, profile, atr, seed=1)
+    other = null_model.run_seed(template, profile, atr, seed=2)
     assert first == again
     assert first["trades"] > 0
     assert (first["trades"], first["pf"]) != (other["trades"], other["pf"])
@@ -80,9 +84,18 @@ def test_random_entry_uses_observed_bracket_in_atr_units() -> None:
 
 
 def test_worker_processes_reproduce_the_in_process_run() -> None:
-    _, recorder, template = _recorded()
-    [remote] = null_model.run_null(template, recorder.profile, recorder.atr, [5], workers=1)
-    assert remote == null_model.run_seed(template, recorder.profile, recorder.atr, seed=5)
+    _, profile, atr, template = _recorded()
+    [remote] = null_model.run_null(template, profile, atr, [5], workers=1)
+    assert remote == null_model.run_seed(template, profile, atr, seed=5)
+
+
+def test_profile_counts_executed_entries_not_signals() -> None:
+    result, profile, atr, template = _recorded()
+    for sym in ("EURUSD", "GBPUSD"):
+        assert profile[sym].entries == sum(t.symbol == sym for t in result.trades)
+    trades = [null_model.run_seed(template, profile, atr, seed=s)["trades"] for s in range(5)]
+    observed = len(result.trades)
+    assert 0.7 * observed <= sum(trades) / len(trades) <= 1.3 * observed
 
 
 def test_percentile_and_summary() -> None:

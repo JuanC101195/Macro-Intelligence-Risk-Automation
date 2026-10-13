@@ -144,9 +144,10 @@ def evaluate_suite(
     null = None
     if recorder is not None:
         progress(f"{null_runs} random-entry versions (ADR 0010)")
-        runs = null_model.run_null(build(base_cfg, None), recorder.profile, recorder.atr,
+        profile = recorder.profile(base_result.trades, base_bt.tf)
+        runs = null_model.run_null(build(base_cfg, None), profile, recorder.atr,
                                    range(null_runs))
-        null = null_model.summarize(base, runs, recorder.profile)
+        null = null_model.summarize(base, runs, profile)
     costs15, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(1.5)}), None,
                      "costs x1.5")
     costs20, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(2.0)}), None,

@@ -1,8 +1,8 @@
 """Gate A criterion A11 (ADR 0010): the strategy's entries against random entries.
 
 1. `ProfileRecorder` wraps the strategy's decider during the base run (results unchanged)
-   and records, per symbol, the calls while flat, the entries, the LONG share and each
-   entry's stop / take-profit distance in ATR(14) units of the signal bar.
+   and records, per symbol, the calls while flat and, for the entries that were EXECUTED,
+   the LONG share and the stop / take-profit distance in ATR(14) units of the signal bar.
 2. `RandomEntries` replaces the entries: while flat, it enters with the observed
    probability, a LONG with the observed share, and a (stop, TP) pair drawn from the
    observed ones scaled by the current ATR(14). Exits, risk, costs and data are unchanged.
@@ -17,7 +17,7 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from trading_system.backtest.engine import Backtest
@@ -76,27 +76,45 @@ def _flat(state: MarketState) -> bool:
 
 
 class ProfileRecorder:
-    """Pass-through decider that records the entry profile of the base run."""
+    """Pass-through decider that records the entry profile of the base run.
+
+    Every entry signal is kept as a candidate; `profile` keeps only those that became
+    trades (ADR 0010 addendum: repeated or rejected signals must not inflate p).
+    """
 
     def __init__(self, decider: Decider, atr: AtrMap) -> None:
         self.decider = decider
         self.atr = atr
-        self.profile: dict[str, SymbolProfile] = {}
+        self.flat_calls: dict[str, int] = {}
+        self.candidates: dict[tuple[str, datetime], tuple[bool, float, float]] = {}
 
     def __call__(self, snap: Any, bar: Bar | None, tick: Tick, spec: SymbolSpec, macro: Any,
                  state: MarketState, params: Any, symbol: str) -> Signal:
         signal = self.decider(snap, bar, tick, spec, macro, state, params, symbol)
         atr = _usable_atr(self.atr, symbol, bar)
-        if atr is None or not _flat(state):
+        if bar is None or atr is None or not _flat(state):
             return signal
-        prof = self.profile.setdefault(symbol, SymbolProfile())
-        prof.flat_calls += 1
+        self.flat_calls[symbol] = self.flat_calls.get(symbol, 0) + 1
         if signal.side is not Side.HOLD and signal.entry_ref is not None \
                 and signal.stop_loss is not None and signal.take_profit is not None:
-            prof.longs += signal.side is Side.LONG
-            prof.brackets.append((abs(signal.entry_ref - signal.stop_loss) / atr,
-                                  abs(signal.take_profit - signal.entry_ref) / atr))
+            self.candidates[(symbol, bar.time)] = (
+                signal.side is Side.LONG, abs(signal.entry_ref - signal.stop_loss) / atr,
+                abs(signal.take_profit - signal.entry_ref) / atr)
         return signal
+
+    def profile(self, trades: Iterable[Any], bar_length: timedelta) -> dict[str, SymbolProfile]:
+        """Profile of the EXECUTED entries; a trade's signal_time is its bar's close."""
+        out = {sym: SymbolProfile(flat_calls=n) for sym, n in self.flat_calls.items()}
+        for trade in trades:
+            found = self.candidates.get((trade.symbol, trade.signal_time - bar_length))
+            if found is None:
+                raise LookupError(f"trade without a recorded signal: {trade.symbol} "
+                                  f"{trade.signal_time}")
+            is_long, stop_k, target_k = found
+            prof = out[trade.symbol]
+            prof.longs += is_long
+            prof.brackets.append((stop_k, target_k))
+        return out
 
 
 class _Stream:
