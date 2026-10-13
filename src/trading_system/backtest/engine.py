@@ -44,6 +44,8 @@ from trading_system.strategy.signals import MarketState, Signal
 CONTRACT = 100_000.0
 LEVERAGE = 100
 BrokerSide = Literal["buy", "sell"]
+# (symbol, closed bar, side, entry time, entry fill, initial stop, current stop) -> new stop
+StopUpdate = Callable[[str, Bar, BrokerSide, datetime, float, float, float], float | None]
 
 
 class BacktestConfig(BaseModel):
@@ -189,6 +191,11 @@ class _Open:
     entry: float
     swap: float = 0.0
     accrued_to: datetime | None = None
+    stop: float | None = None  # current stop when the strategy moved it (else the intent's)
+
+    @property
+    def current_stop(self) -> float:
+        return self.intent.stop_loss if self.stop is None else self.stop
 
 
 @dataclass
@@ -221,6 +228,8 @@ class Backtest:
         decider: Callable[..., Signal] = decide,
         exit_check: Callable[[str, Bar, BrokerSide], bool] | None = None,
         financing: Callable[[str, BrokerSide, datetime], float | None] | None = None,
+        stop_update: StopUpdate | None = None,
+        snapshots: bool = True,
     ) -> None:
         self.cfg = config
         self.bars = {s: list(bars[s]) for s in config.symbols}
@@ -228,6 +237,8 @@ class Backtest:
         self.decide = decider  # injectable for engine tests; production uses baseline decide()
         self.exit_check = exit_check  # strategy-driven exits at the bar close (e.g. rebalance)
         self.financing = financing  # annual net rate of a position (swap), e.g. 0.012
+        self.stop_update = stop_update  # stops moved by the strategy at a bar close
+        self.snapshots = snapshots  # baseline indicators; off for strategies that ignore them
         self.tf = timedelta(minutes=TIMEFRAME_MINUTES[config.strategy.timeframe])
         self.breaker = InMemoryBreaker()
         self.risk = DefaultRiskEngine(
@@ -242,8 +253,15 @@ class Backtest:
         self.bars_total = 0
         self.bars_in_market = 0
 
+    def with_decider(self, decider: Callable[..., Signal]) -> Backtest:
+        """Fresh, unrun copy of this backtest with another decider (e.g. a null model)."""
+        return Backtest(self.cfg, self.bars, macro=self.macro, decider=decider,
+                        exit_check=self.exit_check, financing=self.financing,
+                        stop_update=self.stop_update, snapshots=self.snapshots)
+
     def run(self) -> BacktestResult:
-        snaps = {s: snapshot_series(b, self.cfg.strategy) for s, b in self.bars.items()}
+        snaps = {s: snapshot_series(b, self.cfg.strategy) if self.snapshots else [None] * len(b)
+                 for s, b in self.bars.items()}
         timeline = sorted(
             (bar.time, sym, i) for sym, bars in self.bars.items() for i, bar in enumerate(bars)
             if bar.time < self.cfg.end
@@ -277,6 +295,7 @@ class Backtest:
         self._check_exit(sym, bar)
         self._accrue(sym, close_time)
         self._signal_exit(sym, bar, close_time)
+        self._move_stop(sym, bar)
 
     def _decide_at_close(self, sym: str, i: int, snap: object) -> None:
         bar = self.bars[sym][i]
@@ -321,8 +340,7 @@ class Backtest:
             return
         point = point_size(sym)
         spread = self.cfg.costs.spread(sym) * point
-        hit = check_exit(pos.intent.side, pos.intent.stop_loss, pos.intent.take_profit, bar,
-                         spread)
+        hit = check_exit(pos.intent.side, pos.current_stop, pos.intent.take_profit, bar, spread)
         if hit is None:
             return
         if hit.reason != "take_profit":  # stops are market orders: they slip
@@ -343,6 +361,20 @@ class Backtest:
             notional = notional_usd(sym, pos.intent.volume, self.book.last_close[sym])
             pos.swap += notional * rate * days / 365
         pos.accrued_to = until
+
+    def _move_stop(self, sym: str, bar: Bar) -> None:
+        """Strategy-driven stop at the bar close, effective from the next bar; only tighter."""
+        pos = self.book.open.get(sym)
+        if pos is None or self.stop_update is None:
+            return
+        side = pos.intent.side
+        new = self.stop_update(sym, bar, side, pos.entry_time, pos.entry,
+                               pos.intent.stop_loss, pos.current_stop)
+        if new is None:
+            return
+        tighter = new > pos.current_stop if side == "buy" else new < pos.current_stop
+        if tighter:
+            pos.stop = new
 
     def _signal_exit(self, sym: str, bar: Bar, close_time: datetime) -> None:
         pos = self.book.open.get(sym)

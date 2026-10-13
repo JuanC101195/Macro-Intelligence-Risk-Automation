@@ -26,7 +26,7 @@ from trading_system.backtest.metrics import compute
 from trading_system.broker.contracts import Bar, SymbolSpec, Tick
 from trading_system.domain import Side, bracket_error
 from trading_system.strategy import indicators as ind
-from trading_system.strategy.signals import MarketState, Signal
+from trading_system.strategy.signals import MarketState, Signal, as_hold
 
 ATR_PERIOD = 14
 TARGET_FLOOR = 0.10  # short targets never below 10 % of the entry (ADR 0006 addendum)
@@ -133,15 +133,6 @@ class _Stream:
         return items[int(self.random() * len(items))]
 
 
-def _hold(signal: Signal, reason: str) -> Signal:
-    if signal.side is Side.HOLD:
-        return signal
-    data = signal.model_dump()
-    data.update(side=Side.HOLD, confidence=0.0, reasons=(), hold_reasons=(reason,),
-                entry_ref=None, stop_loss=None, take_profit=None)
-    return Signal(**data)
-
-
 class RandomEntries:
     """Decider with random entries matching a recorded profile (ADR 0010)."""
 
@@ -164,10 +155,10 @@ class RandomEntries:
         atr = _usable_atr(self.atr, symbol, bar)
         prof = self.profile.get(symbol)
         if atr is None or prof is None or not prof.entries or not _flat(state):
-            return _hold(signal, "null_not_eligible")
+            return as_hold(signal, "null_not_eligible")
         rng = self._rng(symbol)
         if rng.random() >= prof.entry_probability:
-            return _hold(signal, "null_no_draw")
+            return as_hold(signal, "null_no_draw")
         is_long = rng.random() < prof.long_share
         stop_k, target_k = rng.choice(prof.brackets)
         return self._entry(signal, tick, spec, atr, is_long, stop_k, target_k)
@@ -182,7 +173,7 @@ class RandomEntries:
             target = max(target, entry * TARGET_FLOOR)
         target = round(target, spec.digits)
         if bracket_error(is_long, entry, stop, target):
-            return _hold(signal, "null_invalid_bracket")
+            return as_hold(signal, "null_invalid_bracket")
         data = signal.model_dump()
         data.update(side=Side.LONG if is_long else Side.SHORT, confidence=0.5,
                     reasons=("random_entry",), hold_reasons=(), entry_ref=entry,
@@ -209,9 +200,7 @@ def _summary(metrics: Mapping[str, Any]) -> dict[str, Any]:
 def run_seed(template: Backtest, profile: Mapping[str, SymbolProfile], atr: AtrMap,
              seed: int) -> dict[str, Any]:
     """One random-entry version of an UNRUN template backtest (fresh state each time)."""
-    bt = Backtest(template.cfg, template.bars, macro=template.macro,
-                  decider=RandomEntries(template.decide, profile, atr, seed),
-                  exit_check=template.exit_check, financing=template.financing)
+    bt = template.with_decider(RandomEntries(template.decide, profile, atr, seed))
     return {"seed": seed, **_summary(compute(bt.run()))}
 
 

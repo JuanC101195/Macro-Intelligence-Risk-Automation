@@ -323,6 +323,32 @@ def backtest_regime(
     _write_report(result, out)
 
 
+@backtest_app.command("fibsr")
+def backtest_fibsr(
+    data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
+    out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
+    neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    null_runs: NullRuns = NULL_RUNS,
+) -> None:
+    """Run fibsr-xau-v002 (ADR 0011/0012): gold Fibonacci + S/R, walk-forward over 12 variants."""
+    from trading_system.backtest import fibsr_suite
+    from trading_system.broker.history import file_sha256, read_bars
+
+    since = datetime(2015, 7, 1, tzinfo=UTC)  # ADR 0011 addendum: research from 2016
+    files = {tf: sorted(data.glob(f"XAUUSD_{tf}_*.parquet")) for tf in ("M5", "H1")}
+    if not files["M5"] or not files["H1"]:
+        typer.echo("missing XAUUSD M5/H1 datasets: run `trading-system data download`", err=True)
+        raise typer.Exit(code=1)
+    m5 = read_bars(files["M5"][-1], since=since)
+    h1 = read_bars(files["H1"][-1], since=since)
+    hashes = {"XAUUSD": file_sha256(files["M5"][-1]),
+              "XAUUSD_H1": file_sha256(files["H1"][-1])}
+    result = fibsr_suite.run_fibsr_suite(
+        m5, h1, hashes, _load_rates(data), neighbours=neighbours, null_runs=null_runs,
+        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+    _write_report(result, out)
+
+
 @backtest_app.command("run")
 def backtest_run(
     symbols: Annotated[str, typer.Option(help="Comma separated")] = "EURUSD,GBPUSD,USDJPY",
