@@ -41,6 +41,18 @@ Se reporta además: percentil del profit factor y de la expectancy observados, p
 
 A11 se aplica a las hipótesis 1–7, 9 y 10 con su configuración base registrada, para saber cuáles tenían entradas mejores que el azar. **No cambia ningún veredicto** (ninguna pasó la Puerta A) ni reabre hipótesis abandonadas. Antes de usar cada resultado, la corrida base debe reproducir el `trades_digest` registrado en `research/experiments.jsonl`; si no coincide, se investiga antes de seguir. La hipótesis 8 (pares) queda fuera por el alcance.
 
+## Adenda 2026-10-12 — calibración con entradas ejecutadas (antes de re-correr)
+
+Al aplicar A11 a las cinco primeras hipótesis se vio que las versiones aleatorias operan **mucho más** que la estrategia (ruptura H4: 1 141 operaciones reales frente a 1 658–1 836 aleatorias; ruptura D1: 220 frente a 318–395). Causa: la probabilidad se calculó con **señales** / llamadas sin posición, y la ruptura repite la señal en cada vela mientras el precio sigue fuera del canal; el gestor de riesgo rechaza la mayoría (9 466 señales para 1 141 operaciones). Las entradas aleatorias, repartidas en el tiempo, se rechazan menos. Con más operaciones el profit factor nulo varía menos, el percentil 95 baja y el criterio queda **sesgado a favor de pasar**. Por eso esos cinco resultados no se usan.
+
+Corrección (antes de cualquier nueva corrida):
+
+1. *p* = **operaciones ejecutadas** del instrumento en la corrida base / llamadas sin posición.
+2. La proporción de LONG y los pares (stop, TP) en ATR se toman solo de las señales que se convirtieron en operación.
+3. Todo lo demás del modelo nulo y del criterio sigue igual. Se reporta el rango de operaciones de los nulos junto a las reales; si la mediana nula queda fuera de ±20 % de las reales, se anota en el resultado.
+
+Además: la corrida base de `baseline-v001-h4` no reproduce el digest registrado a las 03:45 UTC del 2026-10-12 (PF 0.965 frente a 0.970). Con el código de `main`, sin A11, sale el **mismo** digest nuevo (`f14bc57…`), así que la diferencia viene de cambios posteriores al registro (especificaciones por instrumento y costes por símbolo, commit `9daeac0`, que cambió el fingerprint de configuración), no de A11. Las demás corridas base reproducen su registro.
+
 ## Consecuencias
 
 - Toda hipótesis nueva paga ~200 corridas extra de backtest (en H4, ~13 min con todos los núcleos).
