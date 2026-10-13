@@ -17,6 +17,20 @@ def _fmt(value: Any, pct: bool = False) -> str:
     return str(value)
 
 
+def _null_section(null: Mapping[str, Any] | None) -> list[str]:
+    if not null:
+        return []
+    pf = null["null_pf"]
+    return [
+        f"## Random entries (ADR 0010, {null['runs']} versions)", "",
+        f"- Null profit factor: p5 {_fmt(pf['p5'])} · median {_fmt(pf['median'])} · "
+        f"p95 {_fmt(pf['p95'])}; null trades {null['null_trades']['min']}–"
+        f"{null['null_trades']['max']}",
+        f"- Observed rank: profit factor {null['rank_pf']:.0%}, expectancy "
+        f"{null['rank_expectancy']:.0%}; p-value (PF) {null['p_value_pf']:.3f}", "",
+    ]
+
+
 def render(report: Mapping[str, Any]) -> str:
     m = report["metrics"]
     base = m["costs_x1"]
@@ -39,8 +53,9 @@ def render(report: Mapping[str, Any]) -> str:
     ]
     lines += [f"| {c['id']} | {c['criterion']} | {c['threshold']} | {c['value']} | "
               f"{ICON[c['status']]} |" for c in report["gate_a"]]
-    lines += ["", f"**Gate A passed: {'YES' if report['gate_a_passed'] else 'NO'}**", "",
-              "## Summary by cost scenario", "",
+    lines += ["", f"**Gate A passed: {'YES' if report['gate_a_passed'] else 'NO'}**", ""]
+    lines += _null_section(report.get("null_model"))
+    lines += ["## Summary by cost scenario", "",
               "| Metric | costs x1 | costs x1.5 | costs x2 |", SEP4]
     rows = [("Trades", "trades", False), ("Net profit", "net_profit", False),
             ("Return", "return_pct", True), ("Profit factor", "profit_factor", False),

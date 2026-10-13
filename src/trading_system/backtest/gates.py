@@ -23,6 +23,8 @@ MIN_POSITIVE_WINDOWS = 0.60
 MAX_DRAWDOWN_PCT = 0.10
 HOLDOUT_MIN_PROFIT_FACTOR = 1.10
 HOLDOUT_MONTHS = 12
+NULL_RUNS = 200  # ADR 0010: random-entry versions, seeds 0..199
+NULL_PERCENTILE = 95
 
 
 @dataclass(frozen=True)
@@ -90,8 +92,10 @@ def gate_a(
     windows: Sequence[Mapping[str, Any]],
     neighbors: Mapping[str, float | None] | None = None,
     holdout: Mapping[str, Any] | None = None,
+    null: Mapping[str, Any] | None = None,
 ) -> list[GateCheck]:
-    """A1-A10. `neighbors` maps variant name -> expectancy; `holdout` is its metrics."""
+    """A1-A11. `neighbors` maps variant name -> expectancy; `holdout` is its metrics;
+    `null` is the random-entry comparison of ADR 0010 (null_model.summarize)."""
     trades = base["trades"]
     expectancy = base["expectancy"]
     positive_share = _positive_share(windows)
@@ -124,6 +128,11 @@ def gate_a(
         _check("A10", "Hold-out (evaluated once)",
                f"expectancy > 0 and PF >= {HOLDOUT_MIN_PROFIT_FACTOR}",
                None if holdout is None else holdout["profit_factor"], hold_ok),
+        _check("A11", "Profit factor beats random entries (ADR 0010)",
+               f"> p{NULL_PERCENTILE:.0f} of {NULL_RUNS} random versions",
+               None if null is None else
+               f"{_pf(base['profit_factor']):.3f} vs p95 {null['null_pf']['p95']:.3f}",
+               None if null is None else bool(null["passes"])),
     ]
 
 

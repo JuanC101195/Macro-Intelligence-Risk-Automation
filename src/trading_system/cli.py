@@ -12,6 +12,7 @@ import httpx
 import typer
 
 from trading_system import __version__
+from trading_system.backtest.gates import NULL_RUNS
 from trading_system.broker import history
 from trading_system.broker.mt5_client import BrokerError, Mt5Client
 from trading_system.config import ConfigurationError, Settings, load_settings
@@ -21,6 +22,8 @@ from trading_system.macro.crucix_client import CrucixClient
 
 DATASETS = Path("research/datasets")
 REPORTS = Path("research/reports")
+NullRuns = Annotated[int, typer.Option(
+    help="Random-entry versions for A11 (ADR 0010: 200); 0 leaves A11 pending")]
 EXPERIMENTS = Path("research/experiments.jsonl")
 RATES_FILE = "fred_rates.json"
 
@@ -248,6 +251,7 @@ def backtest_carry(
     data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
     out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    null_runs: NullRuns = NULL_RUNS,
 ) -> None:
     """Run carry-v001 (ADR 0004) on D1 with costs, swap, walk-forward and Gate A."""
     from trading_system.backtest import runner
@@ -256,7 +260,7 @@ def backtest_carry(
     bars, hashes = runner.load_datasets(
         data, [s.strip().upper() for s in symbols.split(",")], Timeframe.D1)
     result = runner.run_carry_suite(
-        bars, hashes, _load_rates(data), neighbours=neighbours,
+        bars, hashes, _load_rates(data), neighbours=neighbours, null_runs=null_runs,
         progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 
@@ -268,6 +272,7 @@ def backtest_breakout(
     data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
     out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    null_runs: NullRuns = NULL_RUNS,
 ) -> None:
     """Run breakout-v001 (ADR 0006) on D1, cent-equivalent capital, costs and financing."""
     from trading_system.backtest import runner
@@ -276,7 +281,7 @@ def backtest_breakout(
     bars, hashes = runner.load_datasets(
         data, [s.strip().upper() for s in symbols.split(",")], Timeframe.D1)
     result = runner.run_breakout_suite(
-        bars, hashes, _load_rates(data), neighbours=neighbours,
+        bars, hashes, _load_rates(data), neighbours=neighbours, null_runs=null_runs,
         progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 
@@ -304,6 +309,7 @@ def backtest_regime(
     data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
     out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    null_runs: NullRuns = NULL_RUNS,
 ) -> None:
     """Run regime-h4-v001 (H4 breakout + GMM regime filter) or its control (ADR 0008)."""
     from trading_system.backtest import runner
@@ -313,7 +319,7 @@ def backtest_regime(
     bars, hashes = runner.load_datasets(data, symbols, Timeframe.H4)
     result = runner.run_regime_suite(
         bars, hashes, _load_rates(data), control=control, neighbours=neighbours,
-        progress=lambda name: typer.echo(f"  running {name}...", err=True))
+        null_runs=null_runs, progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 
 
@@ -325,6 +331,7 @@ def backtest_run(
     holdout: Annotated[bool, typer.Option(
         help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
+    null_runs: NullRuns = NULL_RUNS,
     timeframe: Annotated[Timeframe, typer.Option("--tf", help="Bar timeframe")] = Timeframe.M15,
     macro_filter: Annotated[str, typer.Option(
         help="none | block | confirm (ADR 0003, needs `data fred`)")] = "none",
@@ -366,7 +373,7 @@ def backtest_run(
             typer.echo(f"REFUSED: {exc}", err=True)
             raise typer.Exit(code=2) from None
     result = runner.run_suite(bars, hashes, params=params, macro=macro, macro_source=macro_source,
-                              holdout=holdout, neighbours=neighbours,
+                              holdout=holdout, neighbours=neighbours, null_runs=null_runs,
                               progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 
