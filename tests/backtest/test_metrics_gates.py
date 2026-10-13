@@ -64,8 +64,8 @@ def test_gate_a_all_pass_except_pending() -> None:
     checks = gates.gate_a(3.1, _metrics(), _metrics(profit_factor=1.1), WINDOWS,
                           neighbors={"a": 1.0, "b": 0.5})
     status = {c.id: c.status for c in checks}
-    assert status["A10"] == "pending"
-    assert all(s == "pass" for k, s in status.items() if k != "A10")
+    assert status["A10"] == status["A11"] == "pending"
+    assert all(s == "pass" for k, s in status.items() if k not in ("A10", "A11"))
     assert not gates.gate_passed(checks)  # pending is not a pass
 
 

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from trading_system.backtest import gates
+from trading_system.backtest import gates, null_model
 from trading_system.backtest.costs import CostModel
 from trading_system.backtest.engine import Backtest, BacktestConfig
 from trading_system.backtest.financing import make_financing
@@ -85,6 +85,16 @@ def _carry_limits() -> RiskLimits:
 BuildBacktest = Callable[[BacktestConfig, Any], Backtest]
 
 
+def _attach_recorder(bt: Backtest, bars: Mapping[str, Sequence[Bar]]
+                     ) -> null_model.ProfileRecorder | None:
+    """Record the entry profile of the base run (ADR 0010); single-leg engine only."""
+    if type(bt) is not Backtest:
+        return None  # e.g. the two-leg pairs engine (a subclass): A11 stays pending
+    recorder = null_model.ProfileRecorder(bt.decide, null_model.atr_by_bar(bars))
+    bt.decide = recorder
+    return recorder
+
+
 def evaluate_suite(
     bars: Mapping[str, Sequence[Bar]],
     hashes: Mapping[str, str],
@@ -100,12 +110,14 @@ def evaluate_suite(
     start_offset_months: int = 0,
     holdout: bool = False,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """Costs x1/x1.5/x2, walk-forward, neighbour variants and Gate A for any strategy.
 
     `build(cfg, variant)` returns the Backtest to run; `variant` is None for the base run
-    or one of `variants` (neighbours fixed before the run, ADR 0002 A9).
+    or one of `variants` (neighbours fixed before the run, ADR 0002 A9). `null_runs`
+    random-entry versions evaluate A11 (ADR 0010); 0 leaves A11 pending.
     """
     symbols = tuple(sorted(bars))
     cut = holdout_start(bars)
@@ -124,7 +136,17 @@ def evaluate_suite(
         result = build(cfg, variant).run()
         return compute(result), result
 
-    base, base_result = run(base_cfg, None, "costs x1")
+    progress("costs x1")
+    base_bt = build(base_cfg, None)
+    recorder = _attach_recorder(base_bt, bars) if null_runs and not holdout else None
+    base_result = base_bt.run()
+    base = compute(base_result)
+    null = None
+    if recorder is not None:
+        progress(f"{null_runs} random-entry versions (ADR 0010)")
+        runs = null_model.run_null(build(base_cfg, None), recorder.profile, recorder.atr,
+                                   range(null_runs))
+        null = null_model.summarize(base, runs, recorder.profile)
     costs15, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(1.5)}), None,
                      "costs x1.5")
     costs20, _ = run(base_cfg.model_copy(update={"costs": CostModel().scaled(2.0)}), None,
@@ -140,7 +162,7 @@ def evaluate_suite(
     history_years = (cut - trade_from).days / 365.25
     checks = gates.gate_a(history_years, base, costs15, windows,
                           neighbors=variant_exp or None,
-                          holdout=base if holdout else None)
+                          holdout=base if holdout else None, null=null)
     return {
         "generated_at": datetime.now(UTC).isoformat(),
         "label": base_cfg.label,
@@ -155,6 +177,7 @@ def evaluate_suite(
         "metrics": {"costs_x1": base, "costs_x1.5": costs15, "costs_x2": costs20},
         "walk_forward": windows,
         "neighbours_expectancy": variant_exp,
+        "null_model": null,
         "gate_a": [asdict(c) for c in checks],
         "gate_a_passed": gates.gate_passed(checks),
         "assumptions": list(assumptions),
@@ -176,6 +199,7 @@ def run_suite(
     macro_source: str = "unknown (no history)",
     holdout: bool = False,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """baseline-v001 family (ADR 0002 / 0003)."""
@@ -194,7 +218,7 @@ def run_suite(
         assumptions=(f"macro context: {macro_source}",
                      "fixed retail spreads, 2 points slippage on entries and stops, no swap",
                      *_COMMON_ASSUMPTIONS),
-        holdout=holdout, neighbours=neighbours, progress=progress,
+        holdout=holdout, neighbours=neighbours, null_runs=null_runs, progress=progress,
     )
 
 
@@ -216,6 +240,7 @@ def run_carry_suite(
     params: CarryParams | None = None,
     holdout: bool = False,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """carry-v001 (ADR 0004)."""
@@ -238,7 +263,7 @@ def run_carry_suite(
                      f"swap = rate differential - {params.swap_markup}% per year, daily",
                      "fixed retail spreads, 2 points slippage on entries and all exits",
                      *_COMMON_ASSUMPTIONS),
-        holdout=holdout, neighbours=neighbours, progress=progress,
+        holdout=holdout, neighbours=neighbours, null_runs=null_runs, progress=progress,
     )
 
 
@@ -267,6 +292,7 @@ def run_breakout_suite(
     *,
     params: BreakoutParams | None = None,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """breakout-v001 (ADR 0006) on a cent-equivalent account (ADR 0005)."""
@@ -290,7 +316,7 @@ def run_breakout_suite(
                      "fixed spreads and slippage per instrument (ADR 0006)",
                      "currency exposure checked only for 6-letter symbols, at 1x risk",
                      *_COMMON_ASSUMPTIONS),
-        neighbours=neighbours, progress=progress,
+        neighbours=neighbours, null_runs=null_runs, progress=progress,
     )
 
 
@@ -312,6 +338,7 @@ def run_pairs_suite(
     *,
     params: PairsParams | None = None,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """pairs-v001 (ADR 0007) on H1, cent-equivalent capital (ADR 0005)."""
@@ -337,7 +364,7 @@ def run_pairs_suite(
                      "financing per leg: FX rate differential - 1% per year",
                      "fixed retail spreads and 2 points slippage on every leg fill",
                      *_COMMON_ASSUMPTIONS),
-        neighbours=neighbours, progress=progress,
+        neighbours=neighbours, null_runs=null_runs, progress=progress,
     )
 
 
@@ -374,6 +401,7 @@ def run_regime_suite(
     control: bool = False,
     regime: RegimeParams | None = None,
     neighbours: bool = True,
+    null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     """regime-h4-v001, or its unfiltered control breakout-h4-v001 (ADR 0008)."""
@@ -417,7 +445,7 @@ def run_regime_suite(
                      "previous years only" if not control else "no regime filter (control)",
                      "financing, spreads and slippage as ADR 0006",
                      *_COMMON_ASSUMPTIONS),
-        neighbours=neighbours, progress=progress,
+        neighbours=neighbours, null_runs=null_runs, progress=progress,
     )
 
 
