@@ -72,6 +72,13 @@ La orden se ejecuta en la apertura de la vela M5 siguiente, como en todo el moto
 
 Antes de correr el backtest, se generan gráficos de las primeras 10 entradas detectadas en el periodo de investigación, **recortados en la vela de entrada** (sin mostrar qué pasó después). El socio dice si cada una es una entrada que él habría tomado. Si las reglas no se parecen a su criterio, se corrige la traducción con una adenda y se repite este paso; nada de eso usa resultados de rentabilidad.
 
+## Adenda 2026-10-12 — periodo y memoria (antes de escribir código o ver resultados)
+
+Descarga hecha: XAUUSD H1 (129 884 velas) y M5 (1 499 333 velas), ambos desde junio de 2004. Las velas M5 ocupan ~1.9 GB en memoria y cada proceso del modelo nulo (A11) necesita su copia; el PC tiene 13.8 GB. Por eso, y **solo** por eso:
+
+1. El periodo de investigación empieza el **2016-01-01** en M5 (H1 desde 2015-07-01 para calentar ATR, ZigZag y fractales). Quedan ~9.8 años antes del hold-out, muy por encima de A1. El corte se fija sin haber corrido nada y no se mueve después.
+2. El modelo nulo de esta hipótesis usa como máximo **4 procesos**.
+
 ## Consecuencias
 
 - El motor necesita dos cosas nuevas: contexto H1 dentro de una estrategia que decide en M5 (sin mirar el futuro) y stops que se mueven durante la operación. Se implementan con tests de mecánica antes de la corrida.
