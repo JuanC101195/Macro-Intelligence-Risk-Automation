@@ -52,6 +52,20 @@ El resto de las reglas de la ADR 0011 se mantiene: stop en el 78.6 %, objetivo e
 
 La optimización walk-forward queda disponible para otras hipótesis, siempre con su lista de variantes fijada en una ADR antes de correr y contando cada variante en el presupuesto de 20.
 
+## Resultado (2026-10-12) — no pasa la Puerta A
+
+Corrida walk-forward 2019-01 → inicio del hold-out (6.7 años fuera de muestra), costes ×1:
+
+- **Fallan A2** (105 operaciones), **A3** (expectancy negativa), **A4/A5** (PF 0.73 / 0.70), **A6** (46 % de ventanas positivas), **A8**, **A9** (las tres formas de elegir dan expectancy negativa) y **A11**. Pasan A1 y A7 (drawdown 4.3 %).
+- **A11:** el PF queda **por debajo de la mediana** de las 200 versiones con entradas aleatorias. Las entradas no aportan nada frente al azar con la misma gestión.
+- **Elección:** cambia de variante casi cada semestre y en uno no opera. Las variantes con más puntaje de entrenamiento casi nunca llegaban a 30 operaciones. Es la señal típica de que no hay una variante con ventaja estable.
+- **Gestión:** gana el 46 % de las veces, pero la ganancia media es menor que la pérdida media (≈ 0.8 R frente a ≈ 0.9 R). Solo 14 de 105 operaciones llegan al objetivo del 0 %; el resto sale por stop, la mayoría después de asegurar +0.5 R.
+- **Con 0.01 lote fijo** (informativo): −117 USD en 6.7 años, con una racha negativa de 175 USD. Con 100 000 COP de capital (~25 USD), eso es la cuenta entera.
+
+Revisión interna: las corridas por variante y la corrida combinada son coherentes (la elección solo usa operaciones cerradas antes de cada ventana, verificado por tests) y el nulo opera un número de veces comparable (81–127 frente a 105). No se ve ningún error del simulador.
+
+Conforme a lo pre-registrado, **no se ajusta esta hipótesis sobre la historia**. Quedan 8 variantes del presupuesto, que solo se usan con una razón nueva y registrada antes de correr.
+
 ## Consecuencias
 
 - El resultado medido incluye el costo de elegir: si la elección no aporta, se nota fuera de muestra.
