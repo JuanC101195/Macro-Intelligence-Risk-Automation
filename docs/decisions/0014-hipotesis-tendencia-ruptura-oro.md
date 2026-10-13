@@ -94,6 +94,24 @@ Lectura informativa: el filtro EMA mejora a su control en las dos temporalidades
 
 Conclusión de la revisión: no se encontraron errores. El resultado es real dentro del modelo, pero es una evidencia débil.
 
+### Hold-out (A10), evaluado una vez el 2026-10-13 con autorización de Juan
+
+`trendbo-xau-h4-channel`, de 2025-10-01 a 2026-10-11. El marcador `holdout_used.json` queda escrito: el hold-out del proyecto **ya está usado**.
+
+- 20 operaciones, PF **3.82**, expectancy 73.3 por operación (0.91 R), +8.4 %, drawdown 1.2 %. Con costes ×2 casi no cambia. **A10 pasa** (expectancy > 0 y PF ≥ 1.10).
+- Igual que en la investigación, la ganancia viene de las compras: 9 compras (8 ganadoras) dejan +1 409; 11 ventas dejan +57. Es el año en que el oro pasó de ~3 860 a ~4 210 USD.
+- **9 señales rechazadas por lote mínimo** (`volume_below_min`): con el oro cerca de 4 000 USD, un stop de 2 × ATR en H4 ya supera el riesgo de 87.5 con 0.01 lotes. Casi un tercio de las señales del último año **no se podían operar con el capital previsto**. Es la restricción real del negocio (ADR 0005).
+- 20 operaciones son una muestra muy corta.
+
+## Veredicto
+
+`trendbo-xau-h4-channel` es la **primera hipótesis que cumple la Puerta A**: A1–A9 y A11 en la investigación, A10 en el hold-out. Es una evidencia **débil**, por tres razones: fue 1 de 10 pruebas (no significativa con corrección por pruebas múltiples), depende de las compras en un oro alcista y el hold-out tuvo solo 20 operaciones. Conforme a esta ADR y a la ADR 0002:
+
+1. **No hay dinero real.** Pasa a la **Fase 7** (paper trading con velas cerradas) y luego a demo, con la regla congelada tal como está.
+2. En la medición hacia adelante se vigila: la tasa de rechazo por lote mínimo, los spreads y el slippage reales del oro frente al modelo (30 + 5 puntos), y si las ventas siguen sin aportar.
+3. Antes de cualquier cuenta real hay que resolver el capital. Con 0.5 % de 25–175 USD, buena parte de las señales del oro actual no se pueden ejecutar ni siquiera en una cuenta cent. Se resuelve con una ADR propia, sin subir el riesgo por operación.
+4. Ya no queda hold-out para futuras hipótesis. Las próximas se validan con la Puerta A sin A10 más la medición hacia adelante, o con un nuevo periodo reservado definido en una ADR.
+
 ## Consecuencias
 
 - La estrategia se implementa como un módulo nuevo (`strategy/trend_breakout.py`) y una suite propia, sin cambiar las estrategias anteriores.

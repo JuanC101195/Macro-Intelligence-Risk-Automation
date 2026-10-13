@@ -16,6 +16,15 @@
 
 ## Registro
 
+### 2026-10-13 — H-TREND-XAU-1 (ADR 0014): EMA 50/200 + ruptura de 20 velas en oro — rama `feat/trend-breakout-xau`
+
+- Viene de un prompt externo que trajo Juan. Se pre-registraron 10 versiones: H4 y D1 × 4 salidas, más 2 controles sin filtro. Estrategia en `strategy/trend_breakout.py`, suite en `backtest/trend_suite.py`, comando `backtest trend --tf H4|D1 --exit channel|trailing|invalidation|target [--no-trend-filter] [--holdout]`.
+- **`trendbo-xau-h4-channel` es la primera hipótesis que cumple la Puerta A completa:** A1–A9 y A11 en la investigación (2004–2025) y A10 en el hold-out, evaluado una vez. Las otras 9 versiones fallan.
+- La auditoría independiente (pandas) dio cero discrepancias en 555 operaciones.
+- Evidencia débil: 1 de 10 pruebas, la ganancia viene de las compras en un oro alcista y el hold-out tuvo solo 20 operaciones. Además, un tercio de las señales del último año se rechazan por lote mínimo con el capital previsto.
+- **El hold-out del proyecto ya está usado** (`research/reports/holdout_used.json`).
+- Siguiente paso: Fase 7 (paper trading) con esta regla congelada. Dinero real no, y la restricción de capital se resuelve antes con una ADR propia.
+
 ### 2026-10-12 — vectorbt como laboratorio (ADR 0009) — rama `feat/vectorbt-lab`
 
 - vectorbt 1.1.2 (Apache 2.0 + Commons Clause) como extra opcional `research` en un `.venv-research` aparte; un test de arquitectura impide importarlo (ni numba ni sklearn) desde el paquete. CI no cambia.
