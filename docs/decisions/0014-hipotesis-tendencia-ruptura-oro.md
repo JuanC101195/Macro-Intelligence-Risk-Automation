@@ -63,6 +63,37 @@ Advertencia de lote: con 0.5 % de 17 500 (87.5) y el contrato de 100 oz, un stop
 - **Lectura informativa (no decide nada):** filtro frente a control, rechazos por lote mínimo y resultado con 0.01 lote fijo.
 - **Si ninguna pasa:** se cierra la familia de seguimiento de tendencia por ruptura en el oro, en cualquier temporalidad, salvo una razón nueva registrada antes de correr.
 
+## Resultado (2026-10-13) — una versión pasa A1–A9 y A11; A10 sin evaluar
+
+Las 10 versiones se corrieron una vez, con el código comiteado antes (costes ×1/×1.5/×2, 6 vecinas y 200 versiones con entradas aleatorias cada una).
+
+| Versión | Ops | PF ×1 | A11 (PF vs p95 del azar) | Falla |
+|---|---|---|---|---|
+| **h4-channel** | 555 | **1.34** | **1.34 vs 1.29 ✓** | — (solo falta A10) |
+| h4-trailing | 786 | 1.29 | 1.29 vs 1.19 ✓ | A6 (58 %), A7 (10.8 %) |
+| h4-invalidation | 361 | 1.19 | ✗ | A4, A6, A7, A11 |
+| h4-target | 757 | 1.09 | ✗ | A4, A7, A11 |
+| d1-channel | 92 | 1.54 | ✗ | A2, A6, A11 |
+| d1-trailing | 124 | 1.80 | ✗ | A2, A11 |
+| d1-invalidation | 57 | 1.69 | ✗ | A2, A6, A11 |
+| d1-target | 128 | 1.54 | ✗ | A2, A11 |
+| h4-channel-nofilter (control) | 961 | 1.18 | ✗ | A4, A6, A11 |
+| d1-channel-nofilter (control) | 156 | 1.10 | ✗ | A2, A4, A6, A8, A9, A11 |
+
+Lectura informativa: el filtro EMA mejora a su control en las dos temporalidades (H4: PF 1.18 → 1.34; D1: 1.10 → 1.54). En D1, el azar con la misma gestión ya da PF entre 1.5 y 3.5: la tendencia de fondo del oro hace ganar casi cualquier entrada larga con salidas de tendencia.
+
+### Revisión interna de `h4-channel` (antes de creer el resultado)
+
+- **Auditoría independiente:** se repitió la corrida base (mismas 555 operaciones y mismo neto) y se verificó cada operación con pandas, calculado por separado. **Cero discrepancias** en la ruptura de 20 velas, el sentido de la EMA 50/200, el llenado en la apertura siguiente y la salida por el canal de 10.
+- **A7:** la etiqueta dice "a 0.25 %", pero el valor es el drawdown real de la corrida a 0.5 % (8.9 %). El criterio queda más estricto, no más laxo.
+- **Toda la ventaja viene de las compras:** compras con PF 1.60 (339 operaciones); ventas con PF 0.99 (216 operaciones, ligeramente negativas). El periodo 2004–2025 es un mercado alcista del oro de ~8 veces. El nulo usa la misma proporción de compras (61 %), así que la ventaja medida es **cuándo** compra, no solo que compre. Aun así, depende de que el oro siga teniendo tendencias largas.
+- **Concentración:** las 10 mejores operaciones suman el 102 % de la ganancia neta, lo normal en seguimiento de tendencia. Sin el mejor año sigue positiva (A8).
+- **Pruebas múltiples:** p ≈ 0.03 frente al azar, en 10 pruebas. Con una corrección de Bonferroni (0.05/10 = 0.005) **no sería significativa**. Con 10 pruebas, por azar se esperaría que ~0.5 pasaran A11. Esto es lo que anticipaba la sección "Criterio de éxito": evidencia débil.
+- **Rentabilidad:** +63.6 % en 21 años a 0.5 % de riesgo (≈ 2.4 % anual, Sharpe 0.50). Las rachas negativas duran hasta 2 años (2021–2023).
+- **No se hará:** quitar las ventas o elegir la salida `trailing` mirando estos resultados. Sería ajuste a posteriori.
+
+Conclusión de la revisión: no se encontraron errores. El resultado es real dentro del modelo, pero es una evidencia débil.
+
 ## Consecuencias
 
 - La estrategia se implementa como un módulo nuevo (`strategy/trend_breakout.py`) y una suite propia, sin cambiar las estrategias anteriores.
