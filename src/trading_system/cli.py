@@ -355,13 +355,15 @@ def backtest_trend(
     exit_mode: Annotated[str, typer.Option(
         "--exit", help="channel, trailing, invalidation or target")] = "channel",
     trend_filter: Annotated[bool, typer.Option(help="EMA 50/200 filter (off = control)")] = True,
+    holdout: Annotated[bool, typer.Option(
+        help="Evaluate the 12-month hold-out. ONCE only (ADR 0002); recorded.")] = False,
     data: Annotated[Path, typer.Option(help="Datasets directory")] = DATASETS,
     out: Annotated[Path, typer.Option(help="Reports directory")] = REPORTS,
     neighbours: Annotated[bool, typer.Option(help="Run A9 stability variants")] = True,
     null_runs: NullRuns = NULL_RUNS,
 ) -> None:
     """Run one version of trendbo-xau-v001 (ADR 0014): EMA 50/200 + 20-bar breakout on gold."""
-    from trading_system.backtest import runner, trend_suite
+    from trading_system.backtest import gates, runner, trend_suite
     from trading_system.strategy.trend_breakout import EXIT_MODES
 
     timeframe = Timeframe(tf.upper())
@@ -369,10 +371,19 @@ def backtest_trend(
         typer.echo(f"pre-registered: --tf H4|D1, --exit {'|'.join(EXIT_MODES)}", err=True)
         raise typer.Exit(code=2)
     bars, hashes = runner.load_datasets(data, [trend_suite.SYMBOL], timeframe)
+    if holdout:
+        if not typer.confirm("The hold-out can be evaluated only once. Continue?"):
+            raise typer.Exit(code=1)
+        try:
+            gates.claim_holdout(out / "holdout_used.json",
+                                trend_suite.version_name(timeframe, exit_mode, trend_filter))
+        except gates.HoldoutAlreadyUsedError as exc:
+            typer.echo(f"REFUSED: {exc}", err=True)
+            raise typer.Exit(code=2) from None
     result = trend_suite.run_trend_suite(
         bars[trend_suite.SYMBOL], hashes, _load_rates(data), timeframe=timeframe,
         exit_mode=exit_mode,
-        trend_filter=trend_filter, neighbours=neighbours, null_runs=null_runs,
+        trend_filter=trend_filter, holdout=holdout, neighbours=neighbours, null_runs=null_runs,
         progress=lambda name: typer.echo(f"  running {name}...", err=True))
     _write_report(result, out)
 

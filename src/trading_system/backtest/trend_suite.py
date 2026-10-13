@@ -55,6 +55,7 @@ def run_trend_suite(
     timeframe: Timeframe,
     exit_mode: ExitMode,
     trend_filter: bool = True,
+    holdout: bool = False,
     neighbours: bool = True,
     null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
@@ -84,7 +85,7 @@ def run_trend_suite(
                      "financing, spreads and slippage for XAUUSD as ADR 0006",
                      "orders fill at the next bar open; fills across data gaps are cancelled",
                      "breaker reset by a simulated operator at the next 17:00 New York"),
-        neighbours=neighbours, null_runs=null_runs, progress=progress)
+        holdout=holdout, neighbours=neighbours, null_runs=null_runs, progress=progress)
     base = built[0]  # the first build is the costs x1 base run
     result["rejections"] = dict(base.rejections)
     result["hold_reasons"] = dict(base.holds)
