@@ -37,3 +37,33 @@ Es una reproducción de una secuencia de operaciones fija. No reproduce el circu
 ## Decisión posterior
 
 La política para paper trading y demo se elige con un criterio de riesgo, no de ganancia: drawdown máximo ≤ 10 % y sin ruina en ningún periodo y capital. Si ninguna política con lote ≥ 0.01 cumple con el capital previsto, la conclusión es que **hace falta más capital o una cuenta cent**, no subir el riesgo.
+
+
+## Resultado (2026-10-13)
+
+578 operaciones (2004-06 → 2026-10), 201 desde 2019 y 23 en los últimos 12 meses. "Ruina" incluye no tener margen ni para 0.01 lotes: el oro llegó a 5 598 USD en enero de 2026, y 0.01 lote estándar a 1:50 pide ~112 USD de margen.
+
+**Cuenta estándar (0.01 lote = 1 oz): no es viable con 25–175 USD.**
+
+- `fijo-0.01`: con 25 USD no se puede ni abrir desde 2019, por margen. Con 100–175 USD una sola pérdida cuesta 8–17 % del capital y el drawdown llega a **71–84 %** desde 2019.
+- `fijo-0.05` y `escalones`: **ruina** desde 2019 con 100 y 175 USD.
+- `proporcional`: no opera casi nunca, porque 0.5 % de 175 USD no cubre el stop de 0.01 lotes.
+- Los retornos de miles por ciento que aparecen en algunas filas vienen de arriesgar 10–30 % por operación en un solo camino histórico, con drawdowns de 30–90 %. No sirven como referencia.
+
+**Cuenta cent (0.01 lote = 0.01 oz): ninguna política se arruina.** Drawdown máximo en el peor de los tres periodos:
+
+| Política | 25 USD | 100 USD | 175 USD |
+|---|---|---|---|
+| `fijo-0.01` | 12.4 % ✗ | 3.4 % | 2.0 % |
+| `fijo-0.05` | 42.7 % ✗ | 15.0 % ✗ | 9.1 % |
+| `proporcional` | 5.7 % (pero salta 40–100 % de las señales) | 8.4 % | 8.2 % |
+| `escalones` | 12.4 % ✗ | 3.4 % (nunca sube de 0.01) | 2.0 % (nunca sube de 0.01) |
+
+Con el criterio fijado arriba (drawdown ≤ 10 % y sin ruina en todos los periodos y capitales), **solo `proporcional` cumple**, y con 25 USD casi no opera. Con 175 USD en cuenta cent: +40 % en 21 años (+23 % desde 2019), 2–3 señales saltadas.
+
+## Decisión
+
+- **Política para paper y demo:** `proporcional`, que es la del gestor de riesgo. Lote = capital × 0.5 % ÷ pérdida hasta el stop por lote, redondeado hacia abajo, mínimo 0.01 (si no alcanza, no se opera) y **tope 0.05**. El lote sube solo cuando crece el capital o cuando el stop es más corto, y baja cuando el capital cae. Nunca por rachas.
+- **Cuenta cent con al menos 100 USD** (mejor 175). Con 25 USD la estrategia no puede operar la mayoría de las señales con riesgo controlado.
+- **Cuenta estándar con este capital: descartada.**
+- Expectativa realista con 175 USD: del orden de decenas de USD al año, no por semana.
