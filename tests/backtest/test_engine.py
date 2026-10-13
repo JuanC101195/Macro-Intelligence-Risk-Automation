@@ -141,6 +141,37 @@ def test_reproducible() -> None:
     assert first.digest() == second.digest()
 
 
+def _run_with_stop_update(new_stop: float) -> Any:
+    # Bar 3 (entry) never reaches 1.0980; bar 4 dips to 1.0985.
+    bars = four_bars((1.1001, 1.1010, 1.0995, 1.1005), (1.1005, 1.1008, 1.0985, 1.1000))
+    plan = {("EURUSD", bars[2].time): ("LONG", 1.10012, 1.0980, 1.1040)}
+    config = BacktestConfig(symbols=("EURUSD",), start=T0, end=T0 + timedelta(days=30),
+                            limits=LIMITS)
+    return Backtest(config, {"EURUSD": bars}, decider=scripted(plan),
+                    stop_update=lambda *_: new_stop).run()
+
+
+def test_moved_stop_applies_from_the_next_bar() -> None:
+    [t] = _run_with_stop_update(1.0990).trades  # moved at bar 3's close
+    assert t.exit_reason == "stop_loss"
+    assert t.exit_time == T0 + M15 * 5  # bar 4 close
+    assert t.exit_price == pytest.approx(1.0990 - 0.00002)  # stops slip
+
+
+def test_stop_is_never_loosened() -> None:
+    [t] = _run_with_stop_update(1.0970).trades  # looser than 1.0980: ignored
+    assert t.exit_reason == "end_of_data"
+
+
+def test_with_decider_keeps_the_stop_update() -> None:
+    config = BacktestConfig(symbols=("EURUSD",), start=T0, end=T0 + timedelta(days=1),
+                            limits=LIMITS)
+    bt = Backtest(config, {"EURUSD": flat(3)}, stop_update=lambda *_: None, snapshots=False)
+    clone = bt.with_decider(scripted({}))
+    assert clone.stop_update is bt.stop_update
+    assert clone.snapshots is False
+
+
 def test_breaker_reset_by_simulated_operator_next_trading_day() -> None:
     config = BacktestConfig(symbols=("EURUSD",), start=T0, end=T0 + timedelta(days=3),
                             limits=LIMITS)

@@ -209,9 +209,7 @@ def _summary(metrics: Mapping[str, Any]) -> dict[str, Any]:
 def run_seed(template: Backtest, profile: Mapping[str, SymbolProfile], atr: AtrMap,
              seed: int) -> dict[str, Any]:
     """One random-entry version of an UNRUN template backtest (fresh state each time)."""
-    bt = Backtest(template.cfg, template.bars, macro=template.macro,
-                  decider=RandomEntries(template.decide, profile, atr, seed),
-                  exit_check=template.exit_check, financing=template.financing)
+    bt = template.with_decider(RandomEntries(template.decide, profile, atr, seed))
     return {"seed": seed, **_summary(compute(bt.run()))}
 
 

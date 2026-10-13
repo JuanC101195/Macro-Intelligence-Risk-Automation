@@ -58,8 +58,11 @@ def write_bars(bars: Sequence[Bar], path: Path) -> str:
     return file_sha256(path)
 
 
-def read_bars(path: Path) -> list[Bar]:
-    return [Bar(**row) for row in pq.read_table(path, schema=SCHEMA).to_pylist()]
+def read_bars(path: Path, since: datetime | None = None) -> list[Bar]:
+    """All bars, or only those opening at or after `since` (filtered before parsing)."""
+    filters = None if since is None else [("time", ">=", since)]
+    table = pq.read_table(path, schema=SCHEMA, filters=filters)
+    return [Bar(**row) for row in table.to_pylist()]
 
 
 def download(
