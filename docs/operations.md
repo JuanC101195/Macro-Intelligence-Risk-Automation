@@ -53,3 +53,11 @@ Azure quedó como único grabador: las tareas `ITP-Crucix` e `ITP-MacroRecorder`
 
 - Descarga de snapshots de Azure al PC para los backtests (abrir SSH temporal solo desde tu IP y `scp`, o subir a Blob Storage).
 - Respaldo periódico de los snapshots fuera de la VM.
+
+## Paper trading en el PC (Fase 7, ADR 0016)
+
+- Tarea `ITP-PaperTick` (por usuario, sin admin): ejecuta `infra/windows/paper-tick.ps1` cada 5 minutos mientras la sesión está abierta. Cada corrida procesa solo las velas H4 cerradas nuevas. **No envía órdenes.**
+- Estado en `data/paper/paper.db` (SQLite, fuera de git) del checkout principal. Log mensual en `%LOCALAPPDATA%\itp\logs\paper-tick-AAAA-MM.log`.
+- Registrar: `.\infra\windows\register-paper-task.ps1` (con `-SrcDir <ruta>\src` para correr código de una rama todavía sin merge). Quitar: `-Unregister`.
+- Reporte y paridad con el backtest: `.\.venv\Scripts\python.exe -m trading_system.cli paper report` (`--no-parity` si MT5 no está disponible).
+- Si el PC está apagado al cierre de una vela H4, la entrada queda como `missed_late` y la salida por canal se registra al cierre como tardía. Con `stale_data`, MT5 no estaba sincronizado y no se decidió nada: se reintenta en la siguiente corrida.

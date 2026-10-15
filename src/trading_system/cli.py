@@ -33,7 +33,10 @@ mt5_app = typer.Typer(help="MetaTrader 5 (read-only)", no_args_is_help=True)
 data_app = typer.Typer(help="Historical data", no_args_is_help=True)
 macro_app = typer.Typer(help="Crucix macro context", no_args_is_help=True)
 backtest_app = typer.Typer(help="Backtests and ADR 0002 gates", no_args_is_help=True)
+paper_app = typer.Typer(help="Paper trading, no orders sent (ADR 0016)", no_args_is_help=True)
+PAPER_DB = Path("data/paper/paper.db")
 app.add_typer(backtest_app, name="backtest")
+app.add_typer(paper_app, name="paper")
 app.add_typer(config_app, name="config")
 app.add_typer(mt5_app, name="mt5")
 app.add_typer(data_app, name="data")
@@ -489,6 +492,55 @@ def macro_record(
         typer.echo("stopped")
     finally:
         client.close()
+
+
+
+@paper_app.command("tick")
+def paper_tick(
+    db: Annotated[Path, typer.Option(help="Paper trading SQLite file")] = PAPER_DB,
+) -> None:
+    """Process the H4 bars closed since the last run (idempotent; schedule every 5 min)."""
+    from trading_system.storage.paper_store import PaperStore
+    from trading_system.workers.paper_loop import PaperTrader
+
+    store = PaperStore(db)
+    client = _connected_client(_settings_or_exit())
+    try:
+        outcome = PaperTrader(client, store).tick()
+    except BrokerError as exc:
+        store.record_run(datetime.now(UTC), "error", str(exc))
+        typer.echo(f"MT5 ERROR: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    finally:
+        client.shutdown()
+    typer.echo(f"{outcome.status} bars={outcome.bars} {outcome.detail}".rstrip())
+
+
+@paper_app.command("report")
+def paper_report(
+    db: Annotated[Path, typer.Option(help="Paper trading SQLite file")] = PAPER_DB,
+    check_parity: Annotated[bool, typer.Option(
+        "--parity/--no-parity", help="Re-run the backtest on the same bars (needs MT5)")] = True,
+) -> None:
+    """Paper summary (signals, trades, observed spread) and parity with the backtest."""
+    from trading_system.storage.paper_store import PaperStore
+    from trading_system.workers import paper_report as report
+    from trading_system.workers.paper_loop import PaperConfig, frozen_params
+
+    if not db.exists():
+        typer.echo(f"no paper store at {db}; run `paper tick` first", err=True)
+        raise typer.Exit(code=1)
+    store = PaperStore(db)
+    result: dict[str, Any] = {"summary": report.summary(store)}
+    if check_parity:
+        cfg, params = PaperConfig(), frozen_params()
+        client = _connected_client(_settings_or_exit())
+        try:
+            bars = client.closed_bars(cfg.symbol, params.timeframe, cfg.history_bars)
+        finally:
+            client.shutdown()
+        result["parity"] = report.parity(store, bars, params, cfg.capital)
+    typer.echo(json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

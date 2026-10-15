@@ -16,6 +16,13 @@
 
 ## Registro
 
+### 2026-10-14 — Fase 7: paper trading de `trendbo-xau-h4-channel` (ADR 0016) — rama `feat/paper-trading`
+
+- `paper tick` (idempotente, cada 5 min en el PC con la tarea `ITP-PaperTick`) procesa las velas H4 cerradas nuevas con el mismo orden que el motor. Llena al tick real si corre dentro de 15 min del cierre; si no, la entrada queda como `missed_late`. Antes de decidir verifica que MT5 esté sincronizado (`stale_data`): el 2026-10-14 el terminal recién abierto devolvió velas de 2 días antes.
+- `PaperExecutor` (interfaz `Executor`), estado en SQLite (`storage/paper_store.py`, stdlib; Alembic se pospone a la Fase 9), breaker persistido, capital 17 500 cent con lote proporcional y tope 0.05 (ADR 0015).
+- Paridad: con ticks sintéticos el paper reproduce exactamente las 26 operaciones del motor de backtest (test); un punto más de spread ya rompe la igualdad. `paper report` corre el backtest sobre las mismas velas y marca toda diferencia sin explicación.
+- Arrancó en vivo el 2026-10-15 00:34 UTC desde la vela H4 de las 17:00 UTC. Sin swap en esta versión (limitación documentada).
+
 ### 2026-10-13 — H-TREND-XAU-1 (ADR 0014): EMA 50/200 + ruptura de 20 velas en oro — rama `feat/trend-breakout-xau`
 
 - Viene de un prompt externo que trajo Juan. Se pre-registraron 10 versiones: H4 y D1 × 4 salidas, más 2 controles sin filtro. Estrategia en `strategy/trend_breakout.py`, suite en `backtest/trend_suite.py`, comando `backtest trend --tf H4|D1 --exit channel|trailing|invalidation|target [--no-trend-filter] [--holdout]`.
