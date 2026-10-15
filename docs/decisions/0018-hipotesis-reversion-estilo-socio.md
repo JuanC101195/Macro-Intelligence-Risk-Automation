@@ -67,6 +67,15 @@ Mismas entradas, TP 0.45·D, **sin stop**, cierre por tiempo a 24 h, lote fijo 0
 
 La primera prueba dio cero operaciones: las horas del parquet vienen en milisegundos y el código las trataba como nanosegundos, así que `ret60` y *D* quedaron vacíos. Se corrige la unidad. No cambia ninguna regla.
 
+## Resultado — 2026-10-15
+
+- Datos: 6.1 M velas M1 (2009-01-02 → 2026-09-23). Auditoría: 20 de 20 operaciones idénticas a la versión vela a vela.
+- **Ninguna de las 8 variantes es positiva:** PF de 0.38 a 0.48 en todo el periodo (37 000–114 000 operaciones cada una).
+- **Sin costes, el PF es ≈ 1.00 todos los años** (0.92–1.06) y el acierto ronda el 62 %, que es lo que da el azar con TP 0.45·D y stop 0.75·D (0.75 / 1.2 = 62.5 %). La señal "entrar contra el movimiento de la última hora en la parte baja/alta del rango de 4 h" no tiene ventaja; los costes (spread + deslizamiento + comisión, entre el 7 % y el 130 % del TP según el año) la vuelven negativa.
+- Walk-forward 2013–2026: 45 851 operaciones OOS, PF 0.46, los 14 años negativos. **Falla A3–A9.** A11 no se corrió: con A3 y A4 fallidos no puede cambiar el veredicto.
+- **Variante informativa "como opera el socio"** (sin stop, cierre a 24 h, 0.03 lote, 8 400 USD): acierta el 92 % de las operaciones y aun así pierde **todos los años**; neto −41 800 USD, peor operación −771 USD, peor pérdida abierta −1 054 USD; la cuenta **se habría quemado**.
+- **Veredicto: no pasa la Puerta A. Hipótesis descartada**, sin afinar (no se prueban otros TP, horarios ni filtros).
+
 ## Consecuencias
 
 - Hay que descargar M1 de 2010 a 2026 (~6 M velas; local, no se sube).
