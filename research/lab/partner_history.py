@@ -74,10 +74,11 @@ def read_report(path: Path) -> Report:
             }
         )
     deposit = 0.0
-    for r in rows:
+    for r in rows:  # el primer depósito del informe es el capital inicial
         vals = [v for v in r if v is not None]
-        if vals and vals[-1] == INITIAL_BALANCE_LABEL and deposit == 0.0:
+        if vals and vals[-1] == INITIAL_BALANCE_LABEL:
             deposit = _num(vals[-3])
+            break
     pos = pd.DataFrame(records)
     pos["net"] = pos["profit"] + pos["commission"] + pos["swap"]
     pos["dir"] = np.where(pos["side"] == "buy", 1, -1)

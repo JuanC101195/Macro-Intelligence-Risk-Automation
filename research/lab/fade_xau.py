@@ -39,6 +39,8 @@ SS = (0.75, 1.5)
 DIRS = ("both", "long")
 FIRST_TEST_YEAR, TRAIN_YEARS, MIN_TRAIN_TRADES = 2013, 3, 100
 NS = 1_000_000_000 * 60  # nanosegundos por minuto
+OUTPUTS = {"base": Path("research/reports/fade_xau_result_base.json"),
+           "stop3": Path("research/reports/fade_xau_result_stop3.json")}
 
 
 # --------------------------------------------------------------------------- datos
@@ -127,35 +129,67 @@ def signals(m: Market, v: Variant) -> np.ndarray:
     return sig
 
 
+def _first(hits: np.ndarray) -> float:
+    return float(hits[0]) if hits.size else np.inf
+
+
+def _quotes(m: Market, w: slice, side: int, cost_mult: float) -> tuple[np.ndarray, np.ndarray]:
+    """Mínimos y máximos del precio de salida: bid para compras, ask para ventas."""
+    if side == 1:
+        return m.l[w], m.h[w]
+    sp = m.spr[w] * cost_mult
+    return m.l[w] + sp, m.h[w] + sp
+
+
+def _stop_fill(m: Market, k: int, side: int, sl: float, cost_mult: float) -> float:
+    """Stop a mercado: si la vela abre más allá del stop, se llena en la apertura."""
+    slip = SLIP * cost_mult
+    if side == 1:
+        return min(sl, m.o[k]) - slip
+    return max(sl, m.o[k] + m.spr[k] * cost_mult) + slip
+
+
+def _close_fill(m: Market, k: int, side: int, cost_mult: float) -> float:
+    slip = SLIP * cost_mult
+    if side == 1:
+        return m.c[k] - slip
+    return m.c[k] + m.spr[k] * cost_mult + slip
+
+
 def exit_trade(m: Market, j: int, side: int, entry: float, tp: float, sl: float | None,
                time_stop: int, cost_mult: float) -> tuple[int, float, float]:
     """Devuelve (índice de salida, precio de salida, peor excursión en contra)."""
     end = np.searchsorted(m.t, m.t[j] + time_stop * NS, side="left")
     w = slice(j, max(end, j + 1))
-    slip = SLIP * cost_mult
-    if side == 1:  # compra: se sale al bid
-        lows, highs = m.l[w], m.h[w]
-        hit_tp = np.flatnonzero(highs >= tp)
-        hit_sl = np.flatnonzero(lows <= sl) if sl is not None else np.array([], int)
-    else:  # venta: se sale al ask = bid + spread
-        sp = m.spr[w] * cost_mult
-        lows, highs = m.l[w] + sp, m.h[w] + sp
-        hit_tp = np.flatnonzero(lows <= tp)
-        hit_sl = np.flatnonzero(highs >= sl) if sl is not None else np.array([], int)
-    first_tp = hit_tp[0] if hit_tp.size else np.inf
-    first_sl = hit_sl[0] if hit_sl.size else np.inf
-    if first_sl <= first_tp and np.isfinite(first_sl):  # empate -> stop (conservador)
+    lows, highs = _quotes(m, w, side, cost_mult)
+    first_tp = _first(np.flatnonzero(highs >= tp) if side == 1 else np.flatnonzero(lows <= tp))
+    first_sl = np.inf
+    if sl is not None:
+        first_sl = _first(np.flatnonzero(lows <= sl) if side == 1 else np.flatnonzero(highs >= sl))
+    if np.isfinite(first_sl) and first_sl <= first_tp:  # empate -> stop (conservador)
         k = int(first_sl)
-        gap = m.o[j + k] if side == 1 else m.o[j + k] + m.spr[j + k] * cost_mult
-        px = (min(sl, gap) - slip) if side == 1 else (max(sl, gap) + slip)
+        px = _stop_fill(m, j + k, side, sl, cost_mult)  # type: ignore[arg-type]
     elif np.isfinite(first_tp):
         k = int(first_tp)
         px = tp
     else:
         k = w.stop - w.start - 1
-        px = (m.c[j + k] - slip) if side == 1 else (m.c[j + k] + m.spr[j + k] * cost_mult + slip)
+        px = _close_fill(m, j + k, side, cost_mult)
     adverse = (entry - lows[: k + 1].min()) if side == 1 else (highs[: k + 1].max() - entry)
     return j + k, float(px), float(max(adverse, 0.0))
+
+
+def _trade_side(signal: int, rng: np.random.Generator | None, p_long: float) -> int:
+    if rng is None:
+        return signal
+    return 1 if rng.random() < p_long else -1
+
+
+def _entry_price(m: Market, j: int, side: int, cost_mult: float) -> float:
+    slip = SLIP * cost_mult
+    if side == 1:
+        return m.o[j] + m.spr[j] * cost_mult + slip
+    return m.o[j] - slip
 
 
 def simulate(m: Market, sig: np.ndarray, v: Variant, cost_mult: float = 1.0,
@@ -168,14 +202,10 @@ def simulate(m: Market, sig: np.ndarray, v: Variant, cost_mult: float = 1.0,
     for i in cand:
         if m.t[i] < free_at or i + 1 >= n or m.t[i + 1] - m.t[i] > 5 * NS:
             continue
-        side = int(sig[i]) if rng is None else (1 if rng.random() < p_long else -1)
+        side = _trade_side(int(sig[i]), rng, p_long)
         j = i + 1
         d = m.d[i]
-        slip = SLIP * cost_mult
-        if side == 1:
-            entry = m.o[j] + m.spr[j] * cost_mult + slip
-        else:
-            entry = m.o[j] - slip
+        entry = _entry_price(m, j, side, cost_mult)
         tp = entry + side * v.tp_d * d
         sl = None if v.s is None else entry - side * v.s * d
         x, px, mae = exit_trade(m, j, side, entry, tp, sl, v.time_stop, cost_mult)
@@ -329,28 +359,32 @@ def partner_style(m: Market) -> dict:
 
 
 # ------------------------------------------------------------------------- auditoría
-def naive_exit(m: Market, j: int, side: int, entry: float, tp: float, sl: float) -> float:
+def _naive_hits(m: Market, k: int, side: int, tp: float, sl: float) -> tuple[bool, bool]:
+    """(stop tocado, objetivo tocado) en la vela k, con el precio de salida de cada lado."""
+    lo, hi = m.l[k], m.h[k]
+    if side == 1:
+        return bool(lo <= sl), bool(hi >= tp)
+    lo, hi = lo + m.spr[k], hi + m.spr[k]
+    return bool(hi >= sl), bool(lo <= tp)
+
+
+def naive_exit(m: Market, j: int, side: int, tp: float, sl: float) -> float:
     """Bucle vela a vela, independiente de exit_trade."""
     limit = m.t[j] + TIME_STOP_MIN * NS
-    k = j
-    while k + 1 < len(m.t) and m.t[k + 1] < limit:
-        bid_lo, bid_hi = m.l[k], m.h[k]
-        lo, hi = (bid_lo, bid_hi) if side == 1 else (bid_lo + m.spr[k], bid_hi + m.spr[k])
-        sl_hit = lo <= sl if side == 1 else hi >= sl
-        tp_hit = hi >= tp if side == 1 else lo <= tp
+    last = j
+    while last + 1 < len(m.t) and m.t[last + 1] < limit:
+        last += 1
+    for k in range(j, last + 1):
+        sl_hit, tp_hit = _naive_hits(m, k, side, tp, sl)
+        if sl_hit and side == 1:
+            return min(sl, m.o[k]) - SLIP
         if sl_hit:
-            gap = m.o[k] if side == 1 else m.o[k] + m.spr[k]
-            return (min(sl, gap) - SLIP) if side == 1 else (max(sl, gap) + SLIP)
+            return max(sl, m.o[k] + m.spr[k]) + SLIP
         if tp_hit:
             return tp
-        k += 1
-    lo, hi = (m.l[k], m.h[k]) if side == 1 else (m.l[k] + m.spr[k], m.h[k] + m.spr[k])
-    if (lo <= sl) if side == 1 else (hi >= sl):
-        gap = m.o[k] if side == 1 else m.o[k] + m.spr[k]
-        return (min(sl, gap) - SLIP) if side == 1 else (max(sl, gap) + SLIP)
-    if (hi >= tp) if side == 1 else (lo <= tp):
-        return tp
-    return (m.c[k] - SLIP) if side == 1 else (m.c[k] + m.spr[k] + SLIP)
+    if side == 1:
+        return m.c[last] - SLIP
+    return m.c[last] + m.spr[last] + SLIP
 
 
 def audit(m: Market, trades: pd.DataFrame, v: Variant, n: int = 20) -> dict:
@@ -362,7 +396,7 @@ def audit(m: Market, trades: pd.DataFrame, v: Variant, n: int = 20) -> dict:
         side = int(tr["side"])
         tp = tr["entry"] + side * v.tp_d * tr["d"]
         sl = tr["entry"] - side * v.s * tr["d"]
-        diffs.append(abs(naive_exit(m, j, side, tr["entry"], tp, sl) - tr["exit"]))
+        diffs.append(abs(naive_exit(m, j, side, tp, sl) - tr["exit"]))
     return {"checked": len(diffs), "max_abs_diff": round(float(max(diffs)), 6),
             "mismatches": int(sum(d > 1e-6 for d in diffs))}
 
@@ -406,7 +440,7 @@ def main() -> None:
     result["gate_A"] = gate(o1, o15, t1, chosen, null_p95, variants)
     if args.family == "base":
         result["partner_style_no_stop"] = partner_style(m)
-    out = Path(f"research/reports/fade_xau_result_{args.family}.json")
+    out = OUTPUTS[args.family]  # rutas fijas: nada del usuario entra en la ruta
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
