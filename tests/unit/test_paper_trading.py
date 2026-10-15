@@ -48,16 +48,26 @@ class FakeMarket:
     def __init__(self, bars: list[Bar]) -> None:
         self.bars = bars
         self.k = 0
-        self.delay = timedelta(minutes=1)
+        self.reopen = timedelta(0)  # market closed this long after the bar close (daily break)
+        self.delay = timedelta(minutes=1)  # run this long after trading resumed
         self.tick_lag = timedelta(0)  # simulates an out-of-sync terminal
 
+    def resume(self) -> datetime:
+        return self.bars[self.k - 1].time + H4 + self.reopen
+
     def now(self) -> datetime:
-        return self.bars[self.k - 1].time + H4 + self.delay
+        return self.resume() + self.delay
 
     def symbol_spec(self, symbol: str) -> SymbolSpec:
         return symbol_spec(symbol, self.bars[self.k - 1].close)
 
     def closed_bars(self, symbol: str, tf: Timeframe, count: int) -> list[Bar]:
+        if tf is Timeframe.M1:  # first minute after the reopen, once it has closed
+            if self.delay < timedelta(minutes=1):
+                return []
+            price = self.bars[self.k - 1].close
+            return [Bar(time=self.resume(), open=price, high=price, low=price, close=price,
+                        tick_volume=1, spread_points=30)]
         visible = self.bars[:self.k]
         if self.tick_lag:
             visible = [b for b in visible if b.time + H4 <= self.now() - self.tick_lag]
@@ -106,6 +116,20 @@ class TestParityWithBacktest:
         assert len(expected) >= 5, "fixture must produce trades"
         assert got == expected
         assert store.get("balance") == pytest.approx(17_500.0 + sum(e[5] for e in expected))
+
+    def test_parity_holds_when_every_close_falls_in_a_market_break(self) -> None:
+        bars = trending_bars(700)
+        market, store = FakeMarket(bars), PaperStore(":memory:")
+        market.reopen = timedelta(hours=1)  # like the 21:00 UTC gold break
+        paper = trader(market, store)
+        for k in range(60, len(bars)):
+            market.k = k
+            paper.tick()
+        expected = engine_trades(bars, start=bars[60].time, end=bars[-1].time)
+        got = [_key(t.intent.side, t.intent.volume, t.entry_price, t.exit_price or 0.0,
+                    t.exit_reason, t.pnl) for t in store.trades("closed")]
+        assert got == expected
+        assert not any(s["outcome"] == "missed_late" for s in store.signals())
 
     def test_frozen_params_are_the_gate_a_rule(self) -> None:
         p = frozen_params()
@@ -164,6 +188,19 @@ class TestRunControl:
         assert paper.tick().status == "processed"
         assert paper.tick().status == "idle"
         assert len(store.signals()) == 1
+
+    def test_closed_market_waits_for_the_reopen(self) -> None:
+        bars = trending_bars(100)
+        market, store = FakeMarket(bars), PaperStore(":memory:")
+        paper = trader(market, store)
+        market.k = 80
+        paper.tick()
+        market.k, market.reopen, market.delay = 81, timedelta(hours=1), timedelta(0)
+        assert paper.tick().status == "waiting_market"  # break: no M1 bar after the close
+        assert store.get("last_bar_time") == bars[79].time.isoformat()
+        market.delay = timedelta(minutes=2)
+        assert paper.tick().status == "processed"
+        assert store.signals()[-1]["outcome"] != "missed_late"
 
     def test_stale_terminal_decides_nothing(self) -> None:
         bars = trending_bars(100)

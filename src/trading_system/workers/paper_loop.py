@@ -46,7 +46,7 @@ from trading_system.storage.paper_store import PaperStore, PaperTrade
 from trading_system.strategy.signals import MarketState
 from trading_system.strategy.trend_breakout import TrendBreakoutParams, TrendBreakoutStrategy
 
-RunStatus = Literal["started", "processed", "idle", "stale_data", "error"]
+RunStatus = Literal["started", "processed", "idle", "waiting_market", "stale_data", "error"]
 
 
 @dataclass(frozen=True)
@@ -130,13 +130,20 @@ class PaperTrader:
         if done is None:
             return self._start(now, last)
         new = [b for b in bars if b.time > datetime.fromisoformat(done)]
+        resume = self._resume_time(new[-1].time + self.tf) if new else None
+        if new and resume is None:  # market closed since that close: decide after the reopen
+            new = new[:-1]  # ADR 0016 addendum 1
+            if not new:
+                self.store.set("last_run", now.isoformat())
+                return TickOutcome("waiting_market")
         if not new:
             self.store.set("last_run", now.isoformat())
             return TickOutcome("idle")
         strategy = TrendBreakoutStrategy(self.params, {sym: bars})
         for bar in new:
+            prompt = resume is not None and self._prompt(bar, new, resume, now)
             with self.store.transaction():
-                self._process(bar, strategy, quote, prompt=self._prompt(bar, new, now), now=now)
+                self._process(bar, strategy, quote, prompt=prompt, now=now)
         return self._run(now, "processed", len(new),
                          f"{new[0].time:%m-%d %H:%M}..{new[-1].time:%m-%d %H:%M}")
 
@@ -157,8 +164,15 @@ class PaperTrader:
         self.store.set("last_run", now.isoformat())
         return TickOutcome(status, bars, detail)
 
-    def _prompt(self, bar: Bar, new: Sequence[Bar], now: datetime) -> bool:
-        return bar is new[-1] and now - (bar.time + self.tf) <= self.cfg.prompt_window
+    def _prompt(self, bar: Bar, new: Sequence[Bar], resume: datetime, now: datetime) -> bool:
+        """On time = the newest bar, processed within the window after trading resumed."""
+        return (bar is new[-1] and resume >= bar.time + self.tf
+                and now - resume <= self.cfg.prompt_window)
+
+    def _resume_time(self, close_time: datetime) -> datetime | None:
+        """Open of the first M1 bar after `close_time`; None while the market is closed."""
+        m1 = self.market.closed_bars(self.cfg.symbol, Timeframe.M1, 180)
+        return next((b.time for b in m1 if b.time >= close_time), None)
 
     # --- one closed bar (engine order) --------------------------------------------------
 

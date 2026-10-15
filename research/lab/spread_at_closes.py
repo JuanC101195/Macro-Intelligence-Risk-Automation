@@ -1,7 +1,7 @@
 """B4' of ADR 0017: real XAUUSD spread at the first tick after each H4 close (last 6 months).
 
 Read-only. Run from the main checkout (needs .env):
-    $env:PYTHONPATH='<checkout>\\src'; .\\.venv\\Scripts\\python.exe research\\lab\\spread_at_closes.py
+    $env:PYTHONPATH='<checkout>\src'; .\.venv\Scripts\python.exe <this file>
 """
 
 from __future__ import annotations
