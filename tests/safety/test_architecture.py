@@ -97,13 +97,15 @@ def test_only_the_risk_engine_builds_order_intents() -> None:
     assert not builders, f"OrderIntent built outside risk/engine.py: {builders}"
 
 
-def test_no_order_send_anywhere_yet() -> None:
-    # Relaxed in Phase 11, and then only for execution/demo_executor.py.
+def test_order_send_only_in_demo_executor() -> None:
+    # Phase 11 (ADR 0024): the demo executor is the single place allowed to send orders.
+    allowed = SRC / "execution" / "demo_executor.py"
     offenders = [
         str(p.relative_to(SRC)) for p in _python_files()
-        if "order_send" in p.read_text(encoding="utf-8")
+        if p != allowed and "order_send" in p.read_text(encoding="utf-8")
     ]
-    assert not offenders, f"order_send must not appear before Phase 11: {offenders}"
+    assert not offenders, f"order_send outside execution/demo_executor.py: {offenders}"
+    assert "order_send" in allowed.read_text(encoding="utf-8")
 
 
 # ADR 0009: research-lab libraries never enter the package (orders, risk, backtest verdicts).

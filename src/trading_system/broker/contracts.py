@@ -102,6 +102,25 @@ class Position(_Frozen):
     comment: str  # carries the intent_id when the broker keeps it
 
 
+class Deal(_Frozen):
+    """One executed deal from the account history (ADR 0024: idempotency and reconciliation)."""
+
+    ticket: int
+    order: int
+    position_id: int
+    symbol: str
+    side: Literal["buy", "sell"]
+    entry: Literal["in", "out", "inout", "out_by"]
+    volume: float
+    price: float
+    time: AwareDatetime
+    commission: float
+    swap: float
+    profit: float
+    magic: int
+    comment: str
+
+
 class MarketDataSource(Protocol):
     """Read-only access to the broker. Implemented by Mt5Client, FakeMt5, HistoricalDataSource."""
 
