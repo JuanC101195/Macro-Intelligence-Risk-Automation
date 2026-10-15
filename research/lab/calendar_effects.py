@@ -25,6 +25,13 @@ NY = "America/New_York"
 RISK = 0.0025
 GOLD_MIN_SPREAD, GOLD_SLIP = 0.30, 0.05
 IDX_COST = {"US500": (0.50, 0.20), "US30": (2.00, 1.00)}  # (spread, deslizamiento por lado)
+# ADR 0023: spread MT5 del 2026-10-15 y deslizamiento 25 % del spread; moneda de financiación
+_INTL_SPREAD = {"DE40": 0.8, "CHINA50": 5.84, "CHINAH": 3.0, "IT40": 10.0, "NETH25": 0.2,
+                "SWI20": 1.7, "US2000": 5.5, "MIDDE50": 24.9, "TECHDE30": 39.9}
+INTL_COST = {s: (v, 0.25 * v) for s, v in _INTL_SPREAD.items()}
+INTL_CCY = {"DE40": "EUR", "IT40": "EUR", "NETH25": "EUR", "MIDDE50": "EUR", "TECHDE30": "EUR",
+            "SWI20": "CHF", "CHINA50": "USD", "US2000": "USD", "CHINAH": "USD"}  # HKD atado al USD
+COSTS = {**IDX_COST, **INTL_COST}
 MARKUP = 1.0
 DAY_OPEN, DAY_CLOSE = 8 * 60 + 20, 13 * 60 + 30
 TOM_END = pd.Timestamp("2025-10-01")
@@ -136,8 +143,8 @@ def load_d1(symbol: str) -> pd.DataFrame:
     return df[df["date"] < TOM_END].reset_index(drop=True)
 
 
-def tom_trade(df: pd.DataFrame, i: int, j: int, symbol: str, rates: list, cm: float) -> float:
-    spread, slip = (c * cm for c in IDX_COST[symbol])
+def tom_trade(df: pd.DataFrame, i: int, j: int, symbol: str, rates: dict, cm: float) -> float:
+    spread, slip = (c * cm for c in COSTS[symbol])
     entry = df.at[i, "close"] + spread + slip
     atr = df.at[i, "atr"]
     stop = entry - 2 * atr
@@ -148,12 +155,12 @@ def tom_trade(df: pd.DataFrame, i: int, j: int, symbol: str, rates: list, cm: fl
             px = min(stop, df.at[k, "open"]) - slip
             exit_t = df.at[k, "date"]
             break
-    pnl = px - entry - financing(rates, pd.Timestamp(df.at[i, "date"], tz=NY),
+    pnl = px - entry - financing(rates[symbol], pd.Timestamp(df.at[i, "date"], tz=NY),
                                  pd.Timestamp(exit_t, tz=NY), entry, cm)
     return pnl / (2 * atr)
 
 
-def tom_run(data: dict[str, pd.DataFrame], rates: list, entry_rev: int = 1, exit_dom: int = 2,
+def tom_run(data: dict[str, pd.DataFrame], rates: dict, entry_rev: int = 1, exit_dom: int = 2,
             cm: float = 1.0, random_offsets: dict | None = None) -> pd.DataFrame:
     """entry_rev: 1 = penúltimo día hábil; exit_dom: 2 = tercer día hábil del mes siguiente."""
     rows = []
@@ -177,7 +184,7 @@ def tom_run(data: dict[str, pd.DataFrame], rates: list, entry_rev: int = 1, exit
     return pd.DataFrame(rows, columns=["symbol", "date", "side", "r", "risk", "ret"]).sort_values("date")
 
 
-def tom_null(data: dict[str, pd.DataFrame], rates: list, base_keys: list, runs: int) -> list[float]:
+def tom_null(data: dict[str, pd.DataFrame], rates: dict, base_keys: list, runs: int) -> list[float]:
     out = []
     for seed in range(runs):
         rng = np.random.default_rng(seed)
@@ -233,12 +240,39 @@ def split(base: pd.DataFrame, year: int) -> dict:
             f"from_{year}_pf": round(pf(b["ret"].to_numpy()), 3), f"from_{year}_trades": len(b)}
 
 
+def tom_block(data: dict[str, pd.DataFrame], rates: dict, nulls: int) -> dict:
+    base = tom_run(data, rates)
+    nbs = {"entry=-3": tom_run(data, rates, entry_rev=2), "entry=-1": tom_run(data, rates, entry_rev=0),
+           "exit=+2": tom_run(data, rates, exit_dom=1), "exit=+4": tom_run(data, rates, exit_dom=3)}
+    res = evaluate(base, tom_run(data, rates, cm=1.5), tom_run(data, rates, cm=2.0), nbs)
+    res["publication_split"] = split(base, 2012)
+    if nulls and res["A1_to_A9_pass"]:
+        keys = [(s, int(data[s].index[data[s]["date"] == d][0])) for s, d in zip(base["symbol"], base["date"])]
+        pfs = tom_null(data, rates, keys, nulls)
+        obs = pf(base["ret"].to_numpy())
+        res["A11"] = {"null_pf_p95": round(float(np.percentile(pfs, 95)), 3), "observed_pf": round(obs, 3),
+                      "beats_p95": bool(obs > np.percentile(pfs, 95))}
+    else:
+        res["A11"] = "no corrido (A1–A9 no pasan)"
+    return res
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nulls", type=int, default=200)
+    ap.add_argument("--tom-intl", action="store_true", help="ADR 0023: solo cambio de mes internacional")
     args = ap.parse_args()
-    rates = json.load(open("research/datasets/fred_rates.json", encoding="utf-8"))["USD"]
-    result: dict = {"adr": "0022"}
+    all_rates = json.load(open("research/datasets/fred_rates.json", encoding="utf-8"))
+    rates = all_rates["USD"]
+    if args.tom_intl:
+        result = {"adr": "0023", "tom-v1-intl": tom_block(
+            {s: load_d1(s) for s in INTL_COST}, {s: all_rates[INTL_CCY[s]] for s in INTL_COST},
+            args.nulls)}
+        out = Path("research/reports/tom_intl_result.json")
+        out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+        return
+    result = {"adr": "0022"}
 
     g = Gold()
     result["gold_audit"] = gold_audit(g, rates)
@@ -251,22 +285,8 @@ def main() -> None:
         result[name] = res
         print(name, json.dumps(res["summary"], default=str)[:400], flush=True)
 
-    data = {s: load_d1(s) for s in IDX_COST}
-    base = tom_run(data, rates)
-    nbs = {"entry=-3": tom_run(data, rates, entry_rev=2), "entry=-1": tom_run(data, rates, entry_rev=0),
-           "exit=+2": tom_run(data, rates, exit_dom=1), "exit=+4": tom_run(data, rates, exit_dom=3)}
-    res = evaluate(base, tom_run(data, rates, cm=1.5), tom_run(data, rates, cm=2.0), nbs)
-    res["publication_split"] = split(base, 2012)
-    if args.nulls and res["A1_to_A9_pass"]:
-        keys = [(s, int(df.index[df["date"] == d][0])) for s, d in zip(base["symbol"], base["date"])
-                for df in [data[s]]]
-        pfs = tom_null(data, rates, keys, args.nulls)
-        obs = pf(base["ret"].to_numpy())
-        res["A11"] = {"null_pf_p95": round(float(np.percentile(pfs, 95)), 3), "observed_pf": round(obs, 3),
-                      "beats_p95": bool(obs > np.percentile(pfs, 95))}
-    else:
-        res["A11"] = "no corrido (A1–A9 no pasan)"
-    result["tom-v1"] = res
+    result["tom-v1"] = tom_block({s: load_d1(s) for s in IDX_COST}, {s: rates for s in IDX_COST},
+                                 args.nulls)
     out = Path("research/reports/calendar_effects_result.json")
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
