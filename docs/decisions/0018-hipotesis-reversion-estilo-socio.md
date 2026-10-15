@@ -87,6 +87,14 @@ Juan pide simular las mismas entradas con un stop que pongamos nosotros, siempre
 - Referencia sin ventaja: con 1:3, el azar acierta ~25 % y da PF ≈ 1 antes de costes; los costes pesan más porque el stop es corto.
 - Si no pasa, la línea del estilo del socio queda cerrada del todo.
 
+### Resultado de la adenda 2
+
+- Auditoría 20/20 idénticas. Todo el periodo: TP 0.45·D / stop 0.15·D → PF 0.10; TP 1.41·D / stop 0.47·D → PF 0.37–0.39.
+- **Antes de costes sí aparece una ventaja pequeña:** acierto 27.6 % y 26.7 % frente al ~25 % del azar (PF bruto 1.14 y 1.07). Es coherente con el N2 de la ADR 0013 (buen momento de entrada), pero es mucho menor que los costes: spread + deslizamiento + comisión ≈ 0.4 USD por operación, frente a stops de 1–3 USD.
+- Walk-forward 2013–2026: 58 966 operaciones, PF 0.33, 13 de 14 años negativos. **Falla A3–A9; no pasa la Puerta A.**
+- Años recientes con TP 1.41·D (0.03 lote): 2025 −5 094 USD (PF 0.82); 2026 hasta el 23-sep −848 USD (PF 0.98); en las 3 semanas del socio −197 USD (PF 0.91).
+- **Línea del estilo del socio cerrada del todo** (16 de 20 variantes usadas; no se gastan las restantes en afinar).
+
 ## Consecuencias
 
 - Hay que descargar M1 de 2010 a 2026 (~6 M velas; local, no se sube).
