@@ -75,6 +75,10 @@ Cambios, decididos antes de volver a correr:
 2. **N2 (momento + dirección) y peor pérdida abierta con velas M1** (apertura de la vela del minuto). Lo observado para N2 se mide con la misma vara (M1).
 3. **Regla conservadora por cambiar después de mirar:** si con este método el veredicto sale favorable, se **baja un nivel** (evidencia preliminar → indicio; indicio → sin evidencia de ventaja con "señal débil" anotada). El resultado M5 original se reporta al lado.
 
+## Cierre — 2026-10-15
+
+Veredicto final: **sin evidencia de ventaja (señal débil)**, con riesgo de gestión alto. Juan decide **cerrar esta línea**: no se pedirán más datos al socio ni se hará la medición hacia adelante. El proyecto sigue solo con la estrategia propia (`trendbo-xau-h4-channel`, ADR 0014) y sus fases 7 y 11.
+
 ## Consecuencias
 
 - El análisis es un script de laboratorio (`research/lab/partner_history.py`), sin tocar `src/`. Sus resultados quedan en `research/reports/` (local).
