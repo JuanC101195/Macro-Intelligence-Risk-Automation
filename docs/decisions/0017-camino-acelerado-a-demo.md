@@ -42,3 +42,13 @@ Se verificó con las últimas velas: con la hora en UTC explícito, el bid del p
 769 cierres H4 en 6 meses, 641 con tick en los 5 minutos siguientes. Los 128 sin tick son los cierres de las 21:00 UTC (pausa diaria y cierre del viernes). Spread del primer tick: **mediana 22 puntos**, p75 34.5, p95 51 y máximo 69. Mediana por hora de cierre (UTC): 01 h → 28, 05 h → 24.5, 09 h → 21.5, 13 h → 23 y 17 h → 19.5. **B4' se cumple** (22 ≤ 30): el modelo de costes del backtest es conservador.
 
 Hallazgo: si una señal cierra a las 21:00 UTC solo se puede operar en la reapertura. El paper se corrigió (ADR 0016, adenda 1).
+
+## Resultado B1' parte 1: repetición de 12 meses (2026-10-14)
+
+Script `research/lab/paper_replay.py`, de 2025-10-15 a 2026-10-14: 1 547 velas H4 reales procesadas una por una, con un proceso nuevo cada 50 velas (30 reinicios).
+
+- **Primera corrida:** paridad `ok`, pero con 54 `stale_data` falsos (fines de semana) y 1 señal perdida. Se corrigió el chequeo de frescura (ADR 0016, adenda 2) **antes** de repetir.
+- **Segunda corrida:** 1 546 velas procesadas, **0 errores, 0 `stale_data`, 0 duplicados y paridad `ok`** (20 operaciones, 0 diferencias sin explicar). 9 señales rechazadas por lote mínimo, igual que en el motor.
+- Las diferencias de precio frente al motor son de centavos (el motor suma 5 puntos de slippage; la repetición llena al tick sin slippage). La excepción son las salidas por canal tras un hueco: el paper sale al precio de reapertura (el 2026-08-07, 4340.87 contra 4350.05 al cierre en el motor). Eso es lo que pasaría en realidad.
+- **La parte 1 de B1' se cumple.** Falta la parte 2: 10 días hábiles en vivo sin errores, desde el 2026-10-15.
+- El resultado económico de la repetición (+7.7 % en el periodo) no es evidencia nueva: es el hold-out ya usado (ADR 0014).
