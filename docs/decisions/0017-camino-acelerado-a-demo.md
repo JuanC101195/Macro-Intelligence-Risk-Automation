@@ -30,3 +30,9 @@ Para `trendbo-xau-h4-channel`, B1 y B4 se reemplazan por:
 - La demo puede empezar en 2–3 semanas en lugar de 8.
 - La repetición sobre velas pasadas no mide el llenado al tick en vivo. Eso lo cubren los 10 días en vivo y después la propia demo.
 - El paper en vivo sigue corriendo en paralelo con la demo, como referencia.
+
+## Adenda 1 (2026-10-14, antes de volver a medir)
+
+La primera medición de B4' **no es válida**. El script pasaba a `copy_ticks_range` una hora sin zona horaria, y MT5 la interpretó como hora local del PC (UTC−5): los ticks se leyeron 5 horas después de cada cierre. Los cierres de las 17:00 UTC caían en la reapertura tras la pausa diaria del oro, con spreads de hasta ~149 USD, y la mediana salió en 27 puntos.
+
+Se verificó con las últimas velas: con la hora en UTC explícito, el bid del primer tick coincide con el cierre de la vela (4083.48 contra 4083.47 el 2026-10-14 a las 17:00 UTC). Se corrige el script y se vuelve a medir una vez, con el mismo umbral y el mismo procedimiento. El resultado inválido no se usa.

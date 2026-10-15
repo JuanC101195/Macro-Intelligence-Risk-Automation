@@ -35,7 +35,8 @@ def main() -> int:
     missing = 0
     for bar in bars:
         close = bar.time + timedelta(hours=4)
-        start = (close + offset).replace(tzinfo=None)
+        # Aware datetime: a naive one is read by MT5 as PC local time (ADR 0017, adenda 1).
+        start = (close + offset).replace(tzinfo=UTC)
         ticks = mt5.copy_ticks_range(SYMBOL, start, start + WINDOW, mt5.COPY_TICKS_INFO)
         if ticks is None or len(ticks) == 0:
             missing += 1
