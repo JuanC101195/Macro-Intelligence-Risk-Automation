@@ -257,6 +257,51 @@ def simulate(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray
     }
 
 
+def simulate_v2(pos: pd.DataFrame, bars_m1: pd.DataFrame, e: np.ndarray, x: np.ndarray) -> dict:
+    """Adenda 2: N1 con precios reales del bróker; N2 con velas M1."""
+    rng = np.random.default_rng(SEED)
+    n = len(pos)
+    p_long = float((pos["dir"] == 1).mean())
+    vol = pos["volume"].to_numpy()
+    fees = (pos["commission"] + pos["swap"]).to_numpy()
+    move = (pos["close_price"] - pos["open_price"]).to_numpy() * CONTRACT_OZ * vol
+    obs_real = pos["dir"].to_numpy() * move + fees
+    dirs = np.where(rng.random((N_SIMS, n)) < p_long, 1, -1)
+    n1 = dirs * move[None, :] + fees[None, :]
+
+    opens = bars_m1["open"].to_numpy()
+    hours = bars_m1.index.hour.to_numpy()
+    dates = bars_m1.index.date
+    cost_h = spread_cost_by_hour(bars_m1)
+    dur = x - e
+    obs_m1 = pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol - cost_h[hours[e]] * CONTRACT_OZ * vol
+    h_lo, h_hi = int(hours[e].min()), int(hours[e].max())
+    last = len(opens) - 1
+    n2 = np.empty((N_SIMS, n))
+    for j in range(n):
+        cand = np.flatnonzero((dates == dates[e[j]]) & (hours >= h_lo) & (hours <= h_hi))
+        cand = cand[cand + dur[j] <= last]
+        if cand.size == 0:
+            cand = np.array([e[j]])
+        starts = rng.choice(cand, size=N_SIMS)
+        d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
+        n2[:, j] = d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j] - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
+    return {
+        "observed_net_real_prices": round(float(obs_real.sum()), 2),
+        "observed_net_m1_prices": round(float(obs_m1.sum()), 2),
+        "observed_pf_m1_prices": round(pf(obs_m1), 3),
+        "entry_hours_utc": [h_lo, h_hi],
+        "N1_direction": null_summary(obs_real, n1),
+        "N2_timing_and_direction": null_summary(obs_m1, n2),
+    }
+
+
+DOWNGRADE = {
+    "evidencia preliminar": "indicio (bajado un nivel por la adenda 2)",
+    "indicio": "sin evidencia de ventaja (señal débil; bajado un nivel por la adenda 2)",
+}
+
+
 def null_summary(obs: np.ndarray, sims: np.ndarray) -> dict:
     nets = sims.sum(axis=1)
     gains = np.where(sims > 0, sims, 0).sum(axis=1)
@@ -290,7 +335,26 @@ def verdict(desc: dict, nulls: dict | None) -> str:
     return "sin evidencia de ventaja"
 
 
-def main(report_path: str, bars_path: str) -> None:
+def adenda2(gold: pd.DataFrame, m1_path: str, desc: dict, deposit: float) -> dict:
+    m1 = pd.read_parquet(m1_path).set_index("time").sort_index()
+    offset, scores = choose_offset(gold, m1)
+    out: dict = {"alignment_m1": {"chosen_offset_h": offset, "match_rate_by_offset": scores}}
+    if offset is None:
+        out["verdict"] = "sin veredicto (precios M1 no alineados)"
+        return out
+    e = to_bar_index(gold["open_time"], m1, offset)
+    x = to_bar_index(gold["close_time"], m1, offset)
+    mae = mae_usd(gold, m1, e, x)
+    out["management_risk_m1"] = management_risk(gold, m1, e, mae, deposit)
+    nulls = simulate_v2(gold, m1, e, x)
+    out["nulls"] = nulls
+    raw = verdict(desc, nulls)
+    out["verdict_raw"] = raw
+    out["verdict"] = DOWNGRADE.get(raw, raw)
+    return out
+
+
+def main(report_path: str, bars_path: str, m1_path: str | None = None) -> None:
     rep = read_report(Path(report_path))
     bars = pd.read_parquet(bars_path).set_index("time").sort_index()
     gold = rep.positions[rep.positions["symbol"].str.startswith(GOLD_PREFIX)].reset_index(drop=True)
@@ -316,10 +380,12 @@ def main(report_path: str, bars_path: str) -> None:
         nulls = simulate(gold, bars, e, x)
         result["nulls"] = nulls
     result["verdict"] = verdict(result["gold"], nulls)
+    if m1_path:
+        result["adenda2"] = adenda2(gold, m1_path, result["gold"], rep.initial_deposit)
     out = Path("research/reports/partner/adr0013_result.json")
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(*sys.argv[1:4])

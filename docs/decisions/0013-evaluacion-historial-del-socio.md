@@ -65,6 +65,16 @@ Independiente del veredicto, se marca **riesgo de gestión alto** si más del 50
 
 La primera ejecución falló sin producir métricas: algunas horas de apertura o cierre no tienen una vela M5 que empiece exactamente en ese bloque de 5 minutos (pausa diaria del oro, huecos de datos), y el índice devolvía "no encontrado". Corrección: cada hora se asigna a la **última vela que empieza en o antes** de ella. No cambia ningún criterio.
 
+## Adenda 2 — 2026-10-15 (cambio de método DESPUÉS de ver un resultado)
+
+**Resultado pre-registrado (se conserva tal cual):** con velas M5 el veredicto fue *sin evidencia de ventaja*. Pero al revisarlo, el mismo historial medido con nuestros precios dio una ganancia bruta de −119 USD, frente a +507 USD reales. La causa es la resolución: la mediana de duración es ~10 minutos y el precio de apertura de una vela M5 está lejos de sus llenados reales (sus cierres quedan en mediana 0.88 USD por encima de la apertura de la vela, porque sale por TP dentro de la vela). El método M5 no mide lo que se quiere medir.
+
+Cambios, decididos antes de volver a correr:
+
+1. **N1 (dirección) con los precios reales del bróker**, sin velas: cada simulación usa la apertura y el cierre reales de cada posición, con comisión y swap reales, y solo sortea la dirección. Lo observado es su resultado neto real. Es una medida exacta para la pregunta "¿acierta la dirección?".
+2. **N2 (momento + dirección) y peor pérdida abierta con velas M1** (apertura de la vela del minuto). Lo observado para N2 se mide con la misma vara (M1).
+3. **Regla conservadora por cambiar después de mirar:** si con este método el veredicto sale favorable, se **baja un nivel** (evidencia preliminar → indicio; indicio → sin evidencia de ventaja con "señal débil" anotada). El resultado M5 original se reporta al lado.
+
 ## Consecuencias
 
 - El análisis es un script de laboratorio (`research/lab/partner_history.py`), sin tocar `src/`. Sus resultados quedan en `research/reports/` (local).
