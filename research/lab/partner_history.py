@@ -103,7 +103,10 @@ def alignment(pos: pd.DataFrame, bars: pd.DataFrame, offset_h: int) -> float:
 
 
 def choose_offset(pos: pd.DataFrame, bars: pd.DataFrame) -> tuple[int | None, dict[int, float]]:
-    scores = {h: alignment(pos, bars, h) for h in (SERVER_OFFSET_H, SERVER_OFFSET_H - 1, SERVER_OFFSET_H + 1)}
+    scores = {
+        h: alignment(pos, bars, h)
+        for h in (SERVER_OFFSET_H, SERVER_OFFSET_H - 1, SERVER_OFFSET_H + 1)
+    }
     if scores[SERVER_OFFSET_H] >= MATCH_MIN:
         return SERVER_OFFSET_H, scores
     best = max(scores, key=lambda h: scores[h])
@@ -175,14 +178,18 @@ def descriptive(pos: pd.DataFrame, start: float) -> dict:
 def mae_usd(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray) -> np.ndarray:
     low, high = bars["low"].to_numpy(), bars["high"].to_numpy()
     out = np.zeros(len(pos))
-    for j, (d, p, v) in enumerate(zip(pos["dir"], pos["open_price"], pos["volume"])):
+    for j, (d, p, v) in enumerate(
+        zip(pos["dir"], pos["open_price"], pos["volume"], strict=True)
+    ):
         seg = slice(e[j], x[j] + 1)
         adverse = p - low[seg].min() if d == 1 else high[seg].max() - p
         out[j] = max(adverse, 0.0) * CONTRACT_OZ * v
     return out
 
 
-def management_risk(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, mae: np.ndarray, start: float) -> dict:
+def management_risk(
+    pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, mae: np.ndarray, start: float
+) -> dict:
     opens = bars["open"].to_numpy()
     p = pos.reset_index(drop=True)
     hedged = averaged = 0
@@ -230,13 +237,19 @@ def simulate(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray
     cost_h = spread_cost_by_hour(bars)
     vol = pos["volume"].to_numpy()
     dur = x - e
-    obs = pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol - cost_h[hours[e]] * CONTRACT_OZ * vol
+    obs = (
+        pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol
+        - cost_h[hours[e]] * CONTRACT_OZ * vol
+    )
     p_long = float((pos["dir"] == 1).mean())
     rng = np.random.default_rng(SEED)
     n = len(pos)
 
     dirs = np.where(rng.random((N_SIMS, n)) < p_long, 1, -1)
-    n1 = dirs * ((opens[x] - opens[e]) * CONTRACT_OZ * vol)[None, :] - (cost_h[hours[e]] * CONTRACT_OZ * vol)[None, :]
+    n1 = (
+        dirs * ((opens[x] - opens[e]) * CONTRACT_OZ * vol)[None, :]
+        - (cost_h[hours[e]] * CONTRACT_OZ * vol)[None, :]
+    )
 
     h_lo, h_hi = int(hours[e].min()), int(hours[e].max())
     last = len(opens) - 1
@@ -248,7 +261,10 @@ def simulate(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray
             cand = np.array([e[j]])
         starts = rng.choice(cand, size=N_SIMS)
         d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
-        n2[:, j] = d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j] - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
+        n2[:, j] = (
+            d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j]
+            - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
+        )
     return {
         "observed_net_our_prices": round(float(obs.sum()), 2),
         "observed_pf_our_prices": round(pf(obs), 3),
@@ -275,7 +291,10 @@ def simulate_v2(pos: pd.DataFrame, bars_m1: pd.DataFrame, e: np.ndarray, x: np.n
     dates = bars_m1.index.date
     cost_h = spread_cost_by_hour(bars_m1)
     dur = x - e
-    obs_m1 = pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol - cost_h[hours[e]] * CONTRACT_OZ * vol
+    obs_m1 = (
+        pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol
+        - cost_h[hours[e]] * CONTRACT_OZ * vol
+    )
     h_lo, h_hi = int(hours[e].min()), int(hours[e].max())
     last = len(opens) - 1
     n2 = np.empty((N_SIMS, n))
@@ -286,7 +305,10 @@ def simulate_v2(pos: pd.DataFrame, bars_m1: pd.DataFrame, e: np.ndarray, x: np.n
             cand = np.array([e[j]])
         starts = rng.choice(cand, size=N_SIMS)
         d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
-        n2[:, j] = d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j] - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
+        n2[:, j] = (
+            d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j]
+            - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
+        )
     return {
         "observed_net_real_prices": round(float(obs_real.sum()), 2),
         "observed_net_m1_prices": round(float(obs_m1.sum()), 2),

@@ -39,8 +39,10 @@ SS = (0.75, 1.5)
 DIRS = ("both", "long")
 FIRST_TEST_YEAR, TRAIN_YEARS, MIN_TRAIN_TRADES = 2013, 3, 100
 NS = 1_000_000_000 * 60  # nanosegundos por minuto
-OUTPUTS = {"base": Path("research/reports/fade_xau_result_base.json"),
-           "stop3": Path("research/reports/fade_xau_result_stop3.json")}
+OUTPUTS = {
+    "base": Path("research/reports/fade_xau_result_base.json"),
+    "stop3": Path("research/reports/fade_xau_result_stop3.json"),
+}
 
 
 # --------------------------------------------------------------------------- datos
@@ -49,7 +51,7 @@ class Market:
     t: np.ndarray  # int64 ns UTC
     o: np.ndarray
     h: np.ndarray
-    l: np.ndarray
+    lo: np.ndarray
     c: np.ndarray
     spr: np.ndarray  # USD
     ret60: np.ndarray
@@ -74,9 +76,19 @@ def load_market() -> Market:
     hours = df["time"].dt.hour.to_numpy()
     session = np.isin(hours, SESSION_HOURS)
     d = daily_d(df["time"].dt.date.to_numpy(), np.abs(ret60), session)
-    return Market(t, df["open"].to_numpy(), df["high"].to_numpy(), df["low"].to_numpy(), c,
-                  df["spread_points"].to_numpy() * 0.01, ret60, pos4h, d, session,
-                  df["time"].dt.year.to_numpy())
+    return Market(
+        t,
+        df["open"].to_numpy(),
+        df["high"].to_numpy(),
+        df["low"].to_numpy(),
+        c,
+        df["spread_points"].to_numpy() * 0.01,
+        ret60,
+        pos4h,
+        d,
+        session,
+        df["time"].dt.year.to_numpy(),
+    )
 
 
 def daily_d(dates: np.ndarray, absret: np.ndarray, session: np.ndarray) -> np.ndarray:
@@ -90,9 +102,9 @@ def daily_d(dates: np.ndarray, absret: np.ndarray, session: np.ndarray) -> np.nd
         per_day.append(vals[~np.isnan(vals)])
     out = np.full(len(dates), np.nan)
     for i in range(D_DAYS, len(uniq)):
-        pool = np.concatenate(per_day[i - D_DAYS:i])
+        pool = np.concatenate(per_day[i - D_DAYS : i])
         if pool.size:
-            out[bounds[i]:bounds[i + 1]] = np.median(pool)
+            out[bounds[i] : bounds[i + 1]] = np.median(pool)
     return out
 
 
@@ -113,7 +125,12 @@ class Variant:
 
 def family(kind: str) -> list[Variant]:
     if kind == "stop3":  # adenda 2: stop = TP / 3
-        return [Variant(k, round(tp / 3, 4), d, tp_d=tp) for k in KS for tp in (0.45, 1.41) for d in DIRS]
+        return [
+            Variant(k, round(tp / 3, 4), d, tp_d=tp)
+            for k in KS
+            for tp in (0.45, 1.41)
+            for d in DIRS
+        ]
     return [Variant(k, s, d) for k in KS for s in SS for d in DIRS]
 
 
@@ -136,9 +153,9 @@ def _first(hits: np.ndarray) -> float:
 def _quotes(m: Market, w: slice, side: int, cost_mult: float) -> tuple[np.ndarray, np.ndarray]:
     """Mínimos y máximos del precio de salida: bid para compras, ask para ventas."""
     if side == 1:
-        return m.l[w], m.h[w]
+        return m.lo[w], m.h[w]
     sp = m.spr[w] * cost_mult
-    return m.l[w] + sp, m.h[w] + sp
+    return m.lo[w] + sp, m.h[w] + sp
 
 
 def _stop_fill(m: Market, k: int, side: int, sl: float, cost_mult: float) -> float:
@@ -156,8 +173,16 @@ def _close_fill(m: Market, k: int, side: int, cost_mult: float) -> float:
     return m.c[k] + m.spr[k] * cost_mult + slip
 
 
-def exit_trade(m: Market, j: int, side: int, entry: float, tp: float, sl: float | None,
-               time_stop: int, cost_mult: float) -> tuple[int, float, float]:
+def exit_trade(
+    m: Market,
+    j: int,
+    side: int,
+    entry: float,
+    tp: float,
+    sl: float | None,
+    time_stop: int,
+    cost_mult: float,
+) -> tuple[int, float, float]:
     """Devuelve (índice de salida, precio de salida, peor excursión en contra)."""
     end = np.searchsorted(m.t, m.t[j] + time_stop * NS, side="left")
     w = slice(j, max(end, j + 1))
@@ -192,8 +217,14 @@ def _entry_price(m: Market, j: int, side: int, cost_mult: float) -> float:
     return m.o[j] - slip
 
 
-def simulate(m: Market, sig: np.ndarray, v: Variant, cost_mult: float = 1.0,
-             rng: np.random.Generator | None = None, p_long: float = 0.5) -> pd.DataFrame:
+def simulate(
+    m: Market,
+    sig: np.ndarray,
+    v: Variant,
+    cost_mult: float = 1.0,
+    rng: np.random.Generator | None = None,
+    p_long: float = 0.5,
+) -> pd.DataFrame:
     """Recorre las señales en orden, una posición a la vez."""
     cand = np.flatnonzero(sig != 0)
     rows = []
@@ -213,8 +244,9 @@ def simulate(m: Market, sig: np.ndarray, v: Variant, cost_mult: float = 1.0,
         risk = (v.s * d) if v.s is not None else d
         rows.append((m.t[j], m.t[x], m.year[j], side, entry, px, pnl, pnl / risk, mae, d))
         free_at = m.t[x] + COOLDOWN_MIN * NS
-    return pd.DataFrame(rows, columns=["t_in", "t_out", "year", "side", "entry", "exit",
-                                       "pnl", "r", "mae", "d"])
+    return pd.DataFrame(
+        rows, columns=["t_in", "t_out", "year", "side", "entry", "exit", "pnl", "r", "mae", "d"]
+    )
 
 
 # ------------------------------------------------------------------------ métricas
@@ -264,8 +296,14 @@ def neighbours(name: str, variants: list[Variant]) -> list[str]:
     return out
 
 
-def gate(oos1: pd.DataFrame, oos15: pd.DataFrame, trades: dict[str, pd.DataFrame],
-         chosen: dict[int, str], null_p95: float | None, variants: list[Variant]) -> dict:
+def gate(
+    oos1: pd.DataFrame,
+    oos15: pd.DataFrame,
+    trades: dict[str, pd.DataFrame],
+    chosen: dict[int, str],
+    null_p95: float | None,
+    variants: list[Variant],
+) -> dict:
     r = oos1["r"].to_numpy()
     by_year = oos1.groupby("year")["r"].sum()
     best_year = by_year.idxmax() if len(by_year) else None
@@ -288,15 +326,23 @@ def gate(oos1: pd.DataFrame, oos15: pd.DataFrame, trades: dict[str, pd.DataFrame
         "A11_beats_null_p95": (pf(r) > null_p95) if null_p95 is not None else "pendiente",
     }
     passed = all(v is True for k, v in crit.items() if k != "A10")
-    return {"criteria": {k: (bool(v) if isinstance(v, (bool, np.bool_)) else v) for k, v in crit.items()},
-            "passes_gate_A": passed,
-            "summary": {"trades": int(len(r)), "pf": round(pf(r), 3),
-                        "expectancy_r": round(float(r.mean()), 4) if len(r) else None,
-                        "net_r": round(float(r.sum()), 1), "dd_pct_0_25": round(max_dd_pct(r), 2),
-                        "pf_costs_1_5": round(pf(oos15["r"].to_numpy()), 3),
-                        "best_year": int(best_year) if best_year is not None else None,
-                        "by_year_r": {int(k): round(float(v), 1) for k, v in by_year.items()},
-                        "long_share": round(float((oos1["side"] == 1).mean()), 3)}}
+    return {
+        "criteria": {
+            k: (bool(v) if isinstance(v, (bool, np.bool_)) else v) for k, v in crit.items()
+        },
+        "passes_gate_A": passed,
+        "summary": {
+            "trades": int(len(r)),
+            "pf": round(pf(r), 3),
+            "expectancy_r": round(float(r.mean()), 4) if len(r) else None,
+            "net_r": round(float(r.sum()), 1),
+            "dd_pct_0_25": round(max_dd_pct(r), 2),
+            "pf_costs_1_5": round(pf(oos15["r"].to_numpy()), 3),
+            "best_year": int(best_year) if best_year is not None else None,
+            "by_year_r": {int(k): round(float(v), 1) for k, v in by_year.items()},
+            "long_share": round(float((oos1["side"] == 1).mean()), 3),
+        },
+    }
 
 
 # --------------------------------------------------------------------------- nulos
@@ -327,15 +373,20 @@ def _null_run(args: tuple[int, dict[int, tuple[Variant, float, float]]]) -> floa
     return pf(np.concatenate(rs)) if rs else 0.0
 
 
-def null_plan(m: Market, trades: dict[str, pd.DataFrame], chosen: dict[int, str],
-              by_name: dict[str, Variant]) -> dict:
+def null_plan(
+    m: Market, trades: dict[str, pd.DataFrame], chosen: dict[int, str], by_name: dict[str, Variant]
+) -> dict:
     plan = {}
     for y, name in chosen.items():
         tr = trades[name][trades[name]["year"] == y]
         sess = m.session & ~np.isnan(m.d) & (m.year == y)
         busy = ((tr["t_out"] - tr["t_in"]) / NS + COOLDOWN_MIN).sum()
         free = max(sess.sum() - busy, 1)
-        plan[y] = (by_name[name], len(tr) / free, float((tr["side"] == 1).mean()) if len(tr) else 0.5)
+        plan[y] = (
+            by_name[name],
+            len(tr) / free,
+            float((tr["side"] == 1).mean()) if len(tr) else 0.5,
+        )
     return plan
 
 
@@ -346,22 +397,40 @@ def partner_style(m: Market) -> dict:
     usd = tr["pnl"].to_numpy() * 3.0  # 0.03 lotes x 100 onzas = 3 onzas
     mae = tr["mae"].to_numpy() * 3.0
     eq = 8400 + np.cumsum(usd)
-    day = pd.Series(usd, index=pd.to_datetime(tr["t_out"], utc=True)).groupby(lambda x: x.date()).sum()
-    month = pd.Series(usd, index=pd.to_datetime(tr["t_out"], utc=True)).groupby(lambda x: (x.year, x.month)).sum()
+    day = (
+        pd.Series(usd, index=pd.to_datetime(tr["t_out"], utc=True))
+        .groupby(lambda x: x.date())
+        .sum()
+    )
+    month = (
+        pd.Series(usd, index=pd.to_datetime(tr["t_out"], utc=True))
+        .groupby(lambda x: (x.year, x.month))
+        .sum()
+    )
     peak = np.maximum.accumulate(np.concatenate([[8400.0], eq]))[1:]
-    return {"trades": int(len(tr)), "net_usd": round(float(usd.sum()), 2), "pf": round(pf(usd), 3),
-            "win_rate": round(float((usd > 0).mean()), 3),
-            "worst_trade_usd": round(float(usd.min()), 2), "worst_open_loss_usd": round(float(mae.max()), 2),
-            "worst_day_usd": round(float(day.min()), 2), "worst_month_usd": round(float(month.min()), 2),
-            "max_dd_usd": round(float((peak - eq).max()), 2),
-            "min_equity_usd": round(float(eq.min()), 2), "survived": bool(eq.min() > 0),
-            "by_year_usd": {int(y): round(float(v), 0) for y, v in pd.Series(usd).groupby(tr["year"].to_numpy()).sum().items()}}
+    return {
+        "trades": int(len(tr)),
+        "net_usd": round(float(usd.sum()), 2),
+        "pf": round(pf(usd), 3),
+        "win_rate": round(float((usd > 0).mean()), 3),
+        "worst_trade_usd": round(float(usd.min()), 2),
+        "worst_open_loss_usd": round(float(mae.max()), 2),
+        "worst_day_usd": round(float(day.min()), 2),
+        "worst_month_usd": round(float(month.min()), 2),
+        "max_dd_usd": round(float((peak - eq).max()), 2),
+        "min_equity_usd": round(float(eq.min()), 2),
+        "survived": bool(eq.min() > 0),
+        "by_year_usd": {
+            int(y): round(float(v), 0)
+            for y, v in pd.Series(usd).groupby(tr["year"].to_numpy()).sum().items()
+        },
+    }
 
 
 # ------------------------------------------------------------------------- auditoría
 def _naive_hits(m: Market, k: int, side: int, tp: float, sl: float) -> tuple[bool, bool]:
     """(stop tocado, objetivo tocado) en la vela k, con el precio de salida de cada lado."""
-    lo, hi = m.l[k], m.h[k]
+    lo, hi = m.lo[k], m.h[k]
     if side == 1:
         return bool(lo <= sl), bool(hi >= tp)
     lo, hi = lo + m.spr[k], hi + m.spr[k]
@@ -397,8 +466,11 @@ def audit(m: Market, trades: pd.DataFrame, v: Variant, n: int = 20) -> dict:
         tp = tr["entry"] + side * v.tp_d * tr["d"]
         sl = tr["entry"] - side * v.s * tr["d"]
         diffs.append(abs(naive_exit(m, j, side, tp, sl) - tr["exit"]))
-    return {"checked": len(diffs), "max_abs_diff": round(float(max(diffs)), 6),
-            "mismatches": int(sum(d > 1e-6 for d in diffs))}
+    return {
+        "checked": len(diffs),
+        "max_abs_diff": round(float(max(diffs)), 6),
+        "mismatches": int(sum(d > 1e-6 for d in diffs)),
+    }
 
 
 # ------------------------------------------------------------------------------ main
@@ -417,11 +489,18 @@ def main() -> None:
     chosen = walk_forward(t1, last_year)
     o1, o15 = oos(t1, chosen), oos(t15, chosen)
     result: dict = {
-        "adr": "0018", "bars": int(len(m.t)),
-        "data_start": str(pd.Timestamp(m.t[0], tz="UTC")), "data_end": str(pd.Timestamp(m.t[-1], tz="UTC")),
-        "variants_full_period": {n: {"trades": len(t), "pf": round(pf(t["r"].to_numpy()), 3),
-                                     "expectancy_r": round(float(t["r"].mean()), 4)}
-                                 for n, t in t1.items()},
+        "adr": "0018",
+        "bars": int(len(m.t)),
+        "data_start": str(pd.Timestamp(m.t[0], tz="UTC")),
+        "data_end": str(pd.Timestamp(m.t[-1], tz="UTC")),
+        "variants_full_period": {
+            n: {
+                "trades": len(t),
+                "pf": round(pf(t["r"].to_numpy()), 3),
+                "expectancy_r": round(float(t["r"].mean()), 4),
+            }
+            for n, t in t1.items()
+        },
         "chosen_by_year": chosen,
         "audit": {variants[0].name: audit(m, t1[variants[0].name], variants[0])},
     }
@@ -434,9 +513,12 @@ def main() -> None:
             null_pfs = list(ex.map(_null_run, [(s, plan) for s in range(args.nulls)]))
         null_p95 = float(np.percentile(null_pfs, 95))
         obs = pf(o1["r"].to_numpy())
-        result["A11"] = {"null_pf_p95": round(null_p95, 3), "null_pf_median": round(float(np.median(null_pfs)), 3),
-                         "observed_pf": round(obs, 3),
-                         "p_value": round((1 + sum(p >= obs for p in null_pfs)) / (len(null_pfs) + 1), 4)}
+        result["A11"] = {
+            "null_pf_p95": round(null_p95, 3),
+            "null_pf_median": round(float(np.median(null_pfs)), 3),
+            "observed_pf": round(obs, 3),
+            "p_value": round((1 + sum(p >= obs for p in null_pfs)) / (len(null_pfs) + 1), 4),
+        }
     result["gate_A"] = gate(o1, o15, t1, chosen, null_p95, variants)
     if args.family == "base":
         result["partner_style_no_stop"] = partner_style(m)
