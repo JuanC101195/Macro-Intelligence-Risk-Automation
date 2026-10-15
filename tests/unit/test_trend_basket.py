@@ -3,7 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from trading_system.backtest.engine import ClosedTrade
-from trading_system.backtest.trend_suite import BASKET, TIMEFRAMES, _per_symbol, weekly_stats
+from trading_system.backtest.trend_suite import (
+    BASKET,
+    TIMEFRAMES,
+    _per_symbol,
+    r_dollar_stats,
+    version_name,
+    weekly_stats,
+)
 from trading_system.domain import Timeframe
 
 MONDAY = datetime(2026, 1, 5, 10, tzinfo=UTC)
@@ -34,6 +41,17 @@ def test_weekly_stats_counts_weeks_and_results() -> None:
 
 def test_weekly_stats_empty() -> None:
     assert weekly_stats([], capital=10_000.0) == {"weeks": 0}
+
+
+def test_version_name_1r_and_dollar_view() -> None:
+    assert version_name(Timeframe.H4, "target", True, 1.0) == "trendbo-xau-h4-target1r"
+    assert version_name(Timeframe.H4, "target", True) == "trendbo-xau-h4-target"
+    # risk 10 per trade in the fixture: pnl +100 = +10R -> +100 USD at 10 USD per R
+    view = r_dollar_stats([_trade("XAUUSD", 0, 10.0), _trade("XAUUSD", 1, -10.0),
+                           _trade("XAUUSD", 2, -10.0)])
+    assert view["net_usd"] == -10.0
+    assert view["worst_drawdown_usd"] == -20.0
+    assert view["win_rate"] == 0.333
 
 
 def test_per_symbol_profit_factor() -> None:

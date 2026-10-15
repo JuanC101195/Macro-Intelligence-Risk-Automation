@@ -39,9 +39,47 @@ NEIGHBOURS: dict[str, dict[str, Any]] = {
 }
 
 
-def version_name(timeframe: Timeframe, exit_mode: ExitMode, trend_filter: bool) -> str:
-    name = f"trendbo-xau-{timeframe.value.lower()}-{exit_mode}"
+TARGET_RS = (2.0, 1.0)  # 2.0 = ADR 0014, 1.0 = ADR 0020 (1:1)
+USD_PER_R = 10.0  # ADR 0020: "win 10 or lose 10" view of the same trades
+
+
+def version_name(timeframe: Timeframe, exit_mode: ExitMode, trend_filter: bool,
+                 target_r: float = 2.0) -> str:
+    if exit_mode == "target" and target_r == 1.0:
+        name = f"trendbo-xau-{timeframe.value.lower()}-target1r"
+    else:
+        name = f"trendbo-xau-{timeframe.value.lower()}-{exit_mode}"
     return name if trend_filter else f"{name}-nofilter"
+
+
+def r_dollar_stats(trades: Sequence[ClosedTrade], usd_per_r: float = USD_PER_R) -> dict[str, Any]:
+    """The trades as if each one risked `usd_per_r` dollars (ADR 0020), informative."""
+    if not trades:
+        return {"trades": 0}
+    weeks: dict[tuple[int, int], float] = {}
+    months: dict[tuple[int, int], float] = {}
+    run = worst_run = 0.0
+    for t in sorted(trades, key=lambda x: x.exit_time):
+        usd = t.r_multiple * usd_per_r
+        iso = t.exit_time.isocalendar()
+        weeks[(iso[0], iso[1])] = weeks.get((iso[0], iso[1]), 0.0) + usd
+        key = (t.exit_time.year, t.exit_time.month)
+        months[key] = months.get(key, 0.0) + usd
+        run = min(run + usd, 0.0)
+        worst_run = min(worst_run, run)
+    first = min(t.entry_time for t in trades)
+    last = max(t.exit_time for t in trades)
+    n_weeks = max((last - first).days / 7, 1.0)
+    wins = sum(t.pnl > 0 for t in trades)
+    return {
+        "usd_per_trade_risk": usd_per_r,
+        "win_rate": round(wins / len(trades), 3),
+        "net_usd": round(sum(weeks.values()), 2),
+        "mean_week_usd": round(sum(weeks.values()) / n_weeks, 2),
+        "worst_week_usd": round(min(weeks.values()), 2),
+        "worst_month_usd": round(min(months.values()), 2),
+        "worst_drawdown_usd": round(worst_run, 2),
+    }
 
 
 def _limits() -> RiskLimits:
@@ -59,15 +97,16 @@ def run_trend_suite(
     timeframe: Timeframe,
     exit_mode: ExitMode,
     trend_filter: bool = True,
+    target_r: float = 2.0,
     holdout: bool = False,
     neighbours: bool = True,
     null_runs: int = 0,
     progress: Callable[[str], None] = lambda _: None,
 ) -> dict[str, Any]:
     data = {SYMBOL: list(bars)}
-    version = version_name(timeframe, exit_mode, trend_filter)
+    version = version_name(timeframe, exit_mode, trend_filter, target_r)
     params = TrendBreakoutParams(version=version, timeframe=timeframe, exit_mode=exit_mode,
-                                 trend_filter=trend_filter)
+                                 trend_filter=trend_filter, target_r=target_r)
     financing = make_financing(rates)
     built: list[Backtest] = []
 
@@ -95,6 +134,7 @@ def run_trend_suite(
     result["hold_reasons"] = dict(base.holds)
     result["fixed_lot_0_01"] = fixed_lot(base.trades)
     result["weekly"] = weekly_stats(base.trades, CAPITAL)
+    result["usd_per_r_view"] = r_dollar_stats(base.trades)
     return result
 
 
