@@ -198,6 +198,45 @@ def test_mask_login() -> None:
 
 
 def test_client_has_no_order_methods() -> None:
+    # ADR 0024: the only order-related method hands the terminal to the demo executor.
     public = {name for name in dir(Mt5Client) if not name.startswith("_")}
-    assert not {n for n in public if "order" in n and n not in {"calc_margin", "calc_profit"}}
+    order_like = {n for n in public if "order" in n and n not in {"calc_margin", "calc_profit"}}
+    assert order_like == {"order_terminal"}
     assert "send" not in " ".join(public)
+
+
+@pytest.mark.parametrize("trade_mode", [1, 2])  # contest, real
+def test_order_terminal_refuses_non_demo_accounts(trade_mode: int) -> None:
+    fake = FakeMt5(now=NOW, trade_mode=trade_mode)
+    client = Mt5Client(fake, utc_offset_minutes=180, clock=lambda: NOW)
+    with pytest.raises(BrokerError, match="DEMO"):
+        client.order_terminal()
+
+
+def test_order_terminal_on_demo_returns_the_terminal() -> None:
+    fake = FakeMt5(now=NOW)
+    assert Mt5Client(fake, utc_offset_minutes=180, clock=lambda: NOW).order_terminal() is fake
+
+
+def test_deals_are_converted_to_utc_and_filtered() -> None:
+    fake = FakeMt5(now=NOW)
+    epoch = fake.server_epoch(NOW)
+    trade = SimpleNamespace(ticket=10, order=5, position_id=5, symbol="EURUSD", type=0, entry=0,
+                            volume=0.01, price=1.08, time=epoch, commission=-0.1, swap=0.0,
+                            profit=0.0, magic=260_016, comment="abc")
+    balance = SimpleNamespace(**{**vars(trade), "ticket": 11, "type": 2})
+    seen: list[tuple[int, int]] = []
+
+    def history_deals_get(date_from: int, date_to: int) -> tuple[SimpleNamespace, ...]:
+        seen.append((date_from, date_to))
+        return (trade, balance)
+
+    fake.history_deals_get = history_deals_get  # type: ignore[attr-defined]
+    client = Mt5Client(fake, utc_offset_minutes=180, clock=lambda: NOW)
+    deals = client.deals(NOW - timedelta(days=1), NOW)
+    assert [d.ticket for d in deals] == [10]
+    assert deals[0].time == NOW
+    assert deals[0].entry == "in"
+    assert seen[0][1] == epoch  # server wall-clock epoch, not PC local time
+    with pytest.raises(ValueError, match="timezone-aware"):
+        client.deals(datetime(2026, 1, 1), datetime(2026, 1, 2))

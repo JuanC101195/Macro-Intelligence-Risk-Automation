@@ -6,7 +6,8 @@ Key behaviours (docs/architecture.md §5.2, docs/implementation-plan.md Phase 2)
   it, so a broker DST switch stops the client instead of shifting every timestamp.
 - `closed_bars` never returns the candle that is still forming.
 - The full account login never leaves this module (`login_masked`).
-- No order-sending capability: that arrives in Phase 11 behind `OrderGateway`.
+- No order-sending code here. Phase 11 (ADR 0024): `order_terminal()` hands the raw
+  terminal to `execution/demo_executor.py`, and only for demo accounts.
 
 The MetaTrader5 module is injected so the client can be tested with a fake.
 """
@@ -18,7 +19,7 @@ from typing import Any, Literal
 
 from pydantic import SecretStr
 
-from trading_system.broker.contracts import AccountInfo, Bar, Position, SymbolSpec, Tick
+from trading_system.broker.contracts import AccountInfo, Bar, Deal, Position, SymbolSpec, Tick
 from trading_system.config import Settings
 from trading_system.domain import TIMEFRAME_MINUTES, Timeframe
 
@@ -32,6 +33,9 @@ _SYMBOL_TRADE_MODE_LONGONLY = 1
 _SYMBOL_TRADE_MODE_SHORTONLY = 2
 _SYMBOL_TRADE_MODE_FULL = 4
 _ORDER_TYPE = {"buy": 0, "sell": 1}
+_DEAL_ENTRY: dict[int, Literal["in", "out", "inout", "out_by"]] = {
+    0: "in", 1: "out", 2: "inout", 3: "out_by",
+}
 
 # A tick younger than this can be used to infer the server's UTC offset.
 _FRESH_TICK = timedelta(minutes=5)
@@ -257,6 +261,39 @@ class Mt5Client:
             )
             for p in raw
         ]
+
+    def deals(self, start: datetime, end: datetime) -> list[Deal]:
+        """Buy/sell deals executed in [start, end] (UTC, timezone-aware), oldest first."""
+        if start.tzinfo is None or end.tzinfo is None:
+            raise ValueError("start and end must be timezone-aware")
+        offset = self._offset()
+        # Epoch seconds of the SERVER wall clock: naive datetimes would be read as PC time.
+        raw = self._mt5.history_deals_get(int((start + offset).timestamp()),
+                                          int((end + offset).timestamp()))
+        if raw is None:
+            raise BrokerError(f"history_deals_get failed: {self._last_error()}")
+        out = []
+        for d in raw:
+            if d.type not in (0, 1) or d.entry not in _DEAL_ENTRY:
+                continue  # balance, credit and other non-trade deals
+            out.append(Deal(
+                ticket=d.ticket, order=d.order, position_id=d.position_id, symbol=d.symbol,
+                side="buy" if d.type == 0 else "sell", entry=_DEAL_ENTRY[d.entry],
+                volume=d.volume, price=d.price, time=self._to_utc(d.time),
+                commission=d.commission, swap=d.swap, profit=d.profit, magic=d.magic,
+                comment=d.comment,
+            ))
+        return sorted(out, key=lambda x: x.time)
+
+    def filling_flags(self, symbol: str) -> int:
+        """SYMBOL_FILLING_* flags of the symbol (1 = FOK, 2 = IOC)."""
+        return int(getattr(self._call("symbol_info", symbol), "filling_mode", 0))
+
+    def order_terminal(self) -> Any:
+        """Raw terminal for `execution/demo_executor.py` (ADR 0024). Refuses non-demo accounts."""
+        if self.account_info().trade_mode != "demo":
+            raise BrokerError("orders are only allowed on a DEMO account")
+        return self._mt5
 
     def calc_margin(
         self, symbol: str, side: Literal["buy", "sell"], volume: float, price: float

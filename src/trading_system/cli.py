@@ -34,9 +34,11 @@ data_app = typer.Typer(help="Historical data", no_args_is_help=True)
 macro_app = typer.Typer(help="Crucix macro context", no_args_is_help=True)
 backtest_app = typer.Typer(help="Backtests and ADR 0002 gates", no_args_is_help=True)
 paper_app = typer.Typer(help="Paper trading, no orders sent (ADR 0016)", no_args_is_help=True)
+demo_app = typer.Typer(help="Demo account executor (ADR 0024)", no_args_is_help=True)
 PAPER_DB = Path("data/paper/paper.db")
 app.add_typer(backtest_app, name="backtest")
 app.add_typer(paper_app, name="paper")
+app.add_typer(demo_app, name="demo")
 app.add_typer(config_app, name="config")
 app.add_typer(mt5_app, name="mt5")
 app.add_typer(data_app, name="data")
@@ -83,6 +85,50 @@ def config_check() -> None:
     settings = _settings_or_exit()
     typer.echo("OK")
     typer.echo(json.dumps(settings.public_summary(), indent=2))
+
+
+@demo_app.command("check")
+def demo_check(
+    symbol: Annotated[str, typer.Option(help="Symbol the demo will trade")] = "XAUUSD",
+) -> None:
+    """Show whether demo orders would be allowed and how they would be sent. Sends NOTHING.
+
+    Exit 0 if every guard passes, 3 if demo orders are not allowed yet.
+    """
+    from trading_system.execution import demo_executor as dx
+
+    settings = _settings_or_exit()
+    client = _connected_client(settings)
+    try:
+        account = client.account_info()
+        spec = client.symbol_spec(symbol)
+        tick = client.last_tick(symbol)
+        flags = client.filling_flags(symbol)
+        ours = [p for p in client.positions() if p.magic == dx.MAGIC]
+    except BrokerError as exc:
+        typer.echo(f"MT5 ERROR: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    finally:
+        client.shutdown()
+    errors = dx.demo_guard_errors(settings, account)
+    filling = {dx.ORDER_FILLING_FOK: "FOK", dx.ORDER_FILLING_IOC: "IOC",
+               dx.ORDER_FILLING_RETURN: "RETURN"}[dx.filling_type(flags)]
+    report = {
+        "demo_orders_allowed": not errors,
+        "blocking_reasons": errors,
+        "account": {"server": account.server, "trade_mode": account.trade_mode,
+                    "currency": account.currency, "balance": account.balance,
+                    "leverage": account.leverage},
+        "symbol": {"name": spec.symbol, "trade_allowed": spec.trade_allowed,
+                   "short_allowed": spec.short_allowed, "volume_min": spec.volume_min,
+                   "volume_step": spec.volume_step, "stops_level_points": spec.stops_level_points,
+                   "spread_points_now": tick.spread_points, "filling": filling},
+        "magic": dx.MAGIC,
+        "open_positions_with_our_magic": len(ours),
+    }
+    typer.echo(json.dumps(report, indent=2, default=str))
+    if errors:
+        raise typer.Exit(code=3)
 
 
 @mt5_app.command("check")

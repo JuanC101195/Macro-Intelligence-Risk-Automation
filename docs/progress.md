@@ -16,6 +16,14 @@
 
 ## Registro
 
+### 2026-10-15 — Fase 11 (parte 1): ejecutor demo (ADR 0024) — rama `feat/demo-executor`
+
+- `execution/demo_executor.py`: `DemoExecutor` con la interfaz `Executor` (`submit`, `close`, `modify_stop`, `sync`). Único archivo con `order_send` (test de arquitectura relajado solo para él). Candados en cada envío: modo demo, `ALLOW_DEMO_ORDERS`, live apagado, cuenta demo según el terminal, intent demo. Validación previa (volumen, stop y TP respecto al precio actual y al mínimo del bróker). Idempotencia por `magic=260016` + `comment=intent_id` (posiciones y deals de 30 días). Recotización/rechazo → `rejected` sin perseguir; respuesta perdida o error transitorio → se consulta el estado real, un solo reintento, si no `unknown`.
+- `execution/reconciliation.py`: posiciones cerradas en el bróker (se registran con su deal de salida) y posiciones nuestras desconocidas (abren el breaker).
+- `Mt5Client`: `deals()` (época del servidor, no hora del PC), `filling_flags()`, `order_terminal()` (se niega si la cuenta no es demo).
+- `trading-system demo check` (solo lectura). Primera corrida contra MetaQuotes-Demo: cuenta demo, XAUUSD con llenado FOK, spread 20 puntos, bloqueado por `TRADING_MODE=paper` (correcto).
+- 551 tests, ruff y mypy OK. **Falta (parte 2):** conectar el ejecutor al ciclo del paper, orden de prueba mínima con confirmación, tarea programada de la demo.
+
 ### 2026-10-14 — Fase 7: paper trading de `trendbo-xau-h4-channel` (ADR 0016) — rama `feat/paper-trading`
 
 - `paper tick` (idempotente, cada 5 min en el PC con la tarea `ITP-PaperTick`) procesa las velas H4 cerradas nuevas con el mismo orden que el motor. Llena al tick real si corre dentro de 15 min del cierre; si no, la entrada queda como `missed_late`. Antes de decidir verifica que MT5 esté sincronizado (`stale_data`): el 2026-10-14 el terminal recién abierto devolvió velas de 2 días antes.
