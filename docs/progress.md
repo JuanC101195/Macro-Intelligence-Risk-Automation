@@ -10,7 +10,7 @@
 
 ### Próximos pasos acordados
 
-1. **ADR 0010 — criterio A11:** toda hipótesis debe superar el percentil 95 de su versión aleatoria (entradas o filtros al azar con la misma frecuencia), pre-registrado junto con la hipótesis.
+1. **Hecho (ADR 0010):** criterio A11 implementado; ninguna hipótesis previa supera al azar.
 2. **Fase 7 — paper trading y base de datos:** loop de velas cerradas, paper executor, persistencia y reconciliación simulada, para medir spreads, slippage y comportamiento reales mientras Crucix acumula historia propia.
 3. Investigación nueva solo con una fuente de ventaja con fundamento propio (historia macro de Crucix, COT de la CFTC, eventos), pre-registrada y con A11.
 
@@ -24,6 +24,13 @@
 - Evidencia débil: 1 de 10 pruebas, la ganancia viene de las compras en un oro alcista y el hold-out tuvo solo 20 operaciones. Además, un tercio de las señales del último año se rechazan por lote mínimo con el capital previsto.
 - **El hold-out del proyecto ya está usado** (`research/reports/holdout_used.json`).
 - Siguiente paso: Fase 7 (paper trading) con esta regla congelada. Dinero real no, y la restricción de capital se resuelve antes con una ADR propia.
+
+### 2026-10-12 — Criterio A11 contra entradas aleatorias (ADR 0010) — rama `feat/a11-null-entries`
+
+- A11 en la Puerta A: el profit factor debe superar el percentil 95 de 200 versiones con entradas aleatorias (misma frecuencia de entradas ejecutadas, misma proporción LONG/SHORT, stops y objetivos en ATR tomados de las operaciones reales, misma salida, riesgo, costes y datos). Sin evaluar, A11 queda pendiente y la Puerta A no pasa. Opción `--null-runs` (200 por defecto) en `backtest run|carry|breakout|regime`.
+- Primera aplicación con el nulo calibrado por **señales**: las versiones aleatorias operaban 50–60 % más y el umbral quedaba sesgado a favor de pasar (el GMM "pasaba" por 0.0003). Adenda antes de re-correr: calibración con **entradas ejecutadas**.
+- **Retroactivo (informativo): ninguna de las 9 hipótesis de una pata supera al azar.** Pares (ADR 0007) queda fuera hasta definir un nulo de dos patas.
+- Las corridas base de baseline no reproducen su digest de la madrugada del 12-oct: los costes por símbolo cambiaron después (`9daeac0`); A11 no altera la corrida (comprobado con el código de `main`).
 
 ### 2026-10-12 — vectorbt como laboratorio (ADR 0009) — rama `feat/vectorbt-lab`
 
