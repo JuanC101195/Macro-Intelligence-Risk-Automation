@@ -18,6 +18,13 @@ La única iteración que no se puede amañar es probar **la misma regla** en mer
 - **Veredicto de la canasta completa (todo o nada):** Puerta A A1–A9 y, si pasan, A11 con 200 nulos (día de entrada al azar dentro del mes, misma duración). A10 no se evalúa.
 - **Si no pasa, la línea del cambio de mes se cierra** (no se prueban otras fechas, filtros ni subconjuntos).
 
+## Resultado — 2026-10-15
+
+- Universo por la regla: 9 índices (los 8 previstos + CHINAH, financiado con la tasa USD por el tipo de cambio fijo HKD/USD).
+- 1 336 operaciones (2007-02 → 2025-06), acierto 48.5 %, **PF 0.77** (×1.5: 0.65; ×2: 0.55), drawdown 28 %, 32 % de semestres positivos; con 10 USD por operación −1 104 USD. Los cuatro vecinos también negativos. **Falla A3–A9.**
+- Por índice (informativo, no se elige): solo los dos chinos son positivos (CHINA50 1.68, CHINAH 1.45); los europeos quedan entre 0.89 y 0.98, y TECHDE30 (0.08) y US2000 (0.37) se hunden por su spread.
+- **El cambio de mes no se confirma fuera de EE. UU. ni dentro (ADR 0022, adenda 2). Línea cerrada.**
+
 ## Consecuencias
 
 - Descarga D1 de esos índices (local). El script `calendar_effects.py` gana un modo `--tom-intl`.
