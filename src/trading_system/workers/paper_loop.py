@@ -122,15 +122,17 @@ class PaperTrader:
         if not bars:
             return self._run(now, "error", detail="no closed bars")
         last = bars[-1]
-        if quote.time >= last.time + 2 * self.tf:
+        m1 = self.market.closed_bars(sym, Timeframe.M1, 180)
+        missing = self._missing_slot(last, m1, now)
+        if missing is not None:
             return self._run(now, "stale_data",
-                             detail=f"last closed bar {last.time:%Y-%m-%d %H:%M}, "
-                                    f"tick {quote.time:%Y-%m-%d %H:%M}")
+                             detail=f"last closed bar {last.time:%Y-%m-%d %H:%M}, traded "
+                                    f"minutes in the closed bar {missing:%Y-%m-%d %H:%M}")
         done = self.store.get("last_bar_time")
         if done is None:
             return self._start(now, last)
         new = [b for b in bars if b.time > datetime.fromisoformat(done)]
-        resume = self._resume_time(new[-1].time + self.tf) if new else None
+        resume = self._resume_time(new[-1].time + self.tf, m1) if new else None
         if new and resume is None:  # market closed since that close: decide after the reopen
             new = new[:-1]  # ADR 0016 addendum 1
             if not new:
@@ -169,10 +171,19 @@ class PaperTrader:
         return (bar is new[-1] and resume >= bar.time + self.tf
                 and now - resume <= self.cfg.prompt_window)
 
-    def _resume_time(self, close_time: datetime) -> datetime | None:
+    @staticmethod
+    def _resume_time(close_time: datetime, m1: Sequence[Bar]) -> datetime | None:
         """Open of the first M1 bar after `close_time`; None while the market is closed."""
-        m1 = self.market.closed_bars(self.cfg.symbol, Timeframe.M1, 180)
         return next((b.time for b in m1 if b.time >= close_time), None)
+
+    def _missing_slot(self, last: Bar, m1: Sequence[Bar], now: datetime) -> datetime | None:
+        """Start of a CLOSED H4 slot after `last` with traded minutes, i.e. a bar MT5 should
+        already serve (out-of-sync terminal). Weekends and breaks have no traded minutes."""
+        for minute in m1:
+            slot = last.time + ((minute.time - last.time) // self.tf) * self.tf
+            if slot > last.time and slot + self.tf <= now:
+                return slot
+        return None
 
     # --- one closed bar (engine order) --------------------------------------------------
 

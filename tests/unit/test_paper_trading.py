@@ -66,8 +66,11 @@ class FakeMarket:
             if self.delay < timedelta(minutes=1):
                 return []
             price = self.bars[self.k - 1].close
-            return [Bar(time=self.resume(), open=price, high=price, low=price, close=price,
-                        tick_volume=1, spread_points=30)]
+            # Continuous market: there were also traded minutes before the close.
+            times = [self.resume()] if self.reopen else [self.resume() - timedelta(minutes=30),
+                                                         self.resume()]
+            return [Bar(time=t, open=price, high=price, low=price, close=price, tick_volume=1,
+                        spread_points=30) for t in times]
         visible = self.bars[:self.k]
         if self.tick_lag:
             visible = [b for b in visible if b.time + H4 <= self.now() - self.tick_lag]
@@ -200,6 +203,16 @@ class TestRunControl:
         assert store.get("last_bar_time") == bars[79].time.isoformat()
         market.delay = timedelta(minutes=2)
         assert paper.tick().status == "processed"
+        assert store.signals()[-1]["outcome"] != "missed_late"
+
+    def test_weekend_reopen_is_not_stale_data(self) -> None:
+        bars = trending_bars(100)
+        market, store = FakeMarket(bars), PaperStore(":memory:")
+        paper = trader(market, store)
+        market.k = 80
+        paper.tick()
+        market.k, market.reopen, market.delay = 81, timedelta(hours=49), timedelta(minutes=3)
+        assert paper.tick().status == "processed"  # Friday close decided at Sunday's reopen
         assert store.signals()[-1]["outcome"] != "missed_late"
 
     def test_stale_terminal_decides_nothing(self) -> None:

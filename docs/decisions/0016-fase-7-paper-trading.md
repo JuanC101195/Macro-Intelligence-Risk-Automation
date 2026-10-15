@@ -72,3 +72,9 @@ Con unas 23 señales al año, 8 semanas de paper dan del orden de **3 a 5 operac
 La medición del spread histórico (ADR 0017) mostró que al cierre de las 21:00 UTC no hay ticks, por la pausa diaria del oro, y que lo mismo pasa con el cierre del viernes. Con la regla original, el paper decidía y llenaba en ese cierre con el último tick **anterior** a la pausa, un precio que no se puede operar. El backtest, en cambio, llena en la apertura de la vela siguiente, es decir, en la reapertura.
 
 Corrección: la última vela cerrada se procesa solo cuando ya existe una vela M1 abierta **después** de su cierre, o sea, cuando el mercado reabrió. "A tiempo" pasa a medirse desde esa reapertura: dentro de 15 minutos se llena al tick real; si no, la entrada queda como perdida. Mientras el mercado siga cerrado, la vela espera a la siguiente corrida (estado `waiting_market`).
+
+## Adenda 2 (2026-10-14): datos viejos frente a fin de semana
+
+La repetición de 12 meses (ADR 0017) marcó 54 corridas como `stale_data` sin que hubiera desincronización. Eran fines de semana y festivos: el chequeo original ("el tick es más nuevo que la última vela + 2 velas") no distingue entre MT5 desincronizado y mercado cerrado. En vivo, la señal del cierre del viernes no se habría decidido en la reapertura, sino que habría quedado como perdida.
+
+Nueva regla: los datos están viejos solo si las velas M1 de las últimas 3 horas muestran minutos operados dentro de una vela H4 **ya cerrada** y **posterior** a la última vela H4 recibida. Un fin de semana no tiene minutos operados, así que ya no se marca.
