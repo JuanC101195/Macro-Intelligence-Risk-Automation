@@ -22,6 +22,7 @@
 - `PaperExecutor` (interfaz `Executor`), estado en SQLite (`storage/paper_store.py`, stdlib; Alembic se pospone a la Fase 9), breaker persistido, capital 17 500 cent con lote proporcional y tope 0.05 (ADR 0015).
 - Paridad: con ticks sintéticos el paper reproduce exactamente las 26 operaciones del motor de backtest (test); un punto más de spread ya rompe la igualdad. `paper report` corre el backtest sobre las mismas velas y marca toda diferencia sin explicación.
 - Arrancó en vivo el 2026-10-15 00:34 UTC desde la vela H4 de las 17:00 UTC. Sin swap en esta versión (limitación documentada).
+- **ADR 0017 (camino acelerado a demo):** B4' cumplido, con mediana de 22 puntos de spread real al cierre H4 en 6 meses (la primera medición se invalidó por un bug de zona horaria en `copy_ticks_range`, adenda 1). Repetición de 12 meses: 1 546 velas, 30 reinicios, 0 errores y paridad `ok`. Destapó dos bugs del paper ya corregidos: cierres con el mercado en pausa (ADR 0016, adenda 1) y fines de semana marcados como `stale_data` (adenda 2). Falta: 10 días hábiles en vivo y el ejecutor demo (Fase 11).
 
 ### 2026-10-13 — H-TREND-XAU-1 (ADR 0014): EMA 50/200 + ruptura de 20 velas en oro — rama `feat/trend-breakout-xau`
 
