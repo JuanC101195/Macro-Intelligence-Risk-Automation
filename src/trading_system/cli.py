@@ -373,7 +373,7 @@ def backtest_trend(
 
     timeframe = Timeframe(tf.upper())
     if (timeframe not in trend_suite.TIMEFRAMES or exit_mode not in EXIT_MODES
-            or target_r not in trend_suite.TARGET_RS):
+            or not trend_suite.preregistered_target_r(target_r)):
         typer.echo(f"pre-registered: --tf H1|H4|D1, --exit {'|'.join(EXIT_MODES)}, "
                    "--target-r 2.0|1.0", err=True)
         raise typer.Exit(code=2)
