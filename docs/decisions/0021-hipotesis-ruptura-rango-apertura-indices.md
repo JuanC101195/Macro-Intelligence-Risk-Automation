@@ -39,6 +39,23 @@ Riesgo conocido: los estudios usan ETF/futuros con costes bajos; aquí son CFD d
 - **Control informativo:** "comprar siempre" con las mismas reglas de stop y salida (los índices suben a largo plazo; la ventaja debe venir de la dirección, no de la deriva).
 - Se reporta: operaciones por semana, % de semanas positivas, peor semana y mes, y vista en dólares con 10 USD por operación.
 
+## Resultado — 2026-10-15 (US500 + US30, 2016-01 → 2026-10)
+
+| | v5 (rango 5 min) | v15 (rango 15 min) |
+|---|---|---|
+| Operaciones (por semana) | 4 695 (9.5) | 4 727 (9.6) |
+| Acierto | 18 % | 25 % |
+| PF costes ×1 / ×1.5 / ×2 | 0.89 / 0.82 / 0.76 | 0.90 / 0.84 / 0.80 |
+| PF sin costes | 1.05 | 1.03 |
+| Drawdown máx. (0.25 %) | 67.5 % | 63.3 % |
+| Con 10 USD por operación: neto / semana media | −5 270 / −10.7 USD | −4 386 / −8.9 USD |
+| Control "comprar siempre" | PF 0.85 | PF 0.93 |
+| Criterios | fallan A3–A9 | fallan A3–A9 |
+
+- Auditoría: 20 de 20 operaciones idénticas a la versión vela a vela.
+- Antes de costes la ventaja es mínima (PF 1.03–1.05); los costes del CFD (spread + deslizamiento ≈ 6–9 % de R por operación) la vuelven negativa. Solo 2021–2022 fueron positivos; 2024–2026 negativos.
+- **No pasa la Puerta A. Hipótesis descartada**, sin afinar. A11 no se corre.
+
 ## Consecuencias
 
 - Backtest vectorizado de laboratorio (`research/lab/orb_us.py`), con auditoría de 20 operaciones contra un bucle vela a vela. Si pasa, se porta a `src/` antes de paper.
