@@ -1,0 +1,32 @@
+# ADR 0017 — Camino acelerado de paper a demo para `trendbo-xau-h4-channel`
+
+- Fecha: 2026-10-14
+- Estado: aceptada (escrita **antes** de medir el spread histórico y antes de la repetición)
+- Modifica: ADR 0002 (Puerta B, solo B1 y B4 y solo para esta regla), ADR 0016
+
+## Contexto
+
+La Puerta B pide 8 semanas en paper (B1). Con unas 23 señales al año, esas 8 semanas dan 3 a 5 operaciones. El tiempo sirve para probar la tubería y medir costes, no la ventaja de la estrategia. Juan no quiere esperar hasta diciembre para la demo.
+
+La demo usa dinero ficticio del bróker: adelantarla no arriesga dinero. Lo que la Puerta B protege es que a la demo llegue un sistema sin errores y con costes conocidos. Eso se puede verificar de otra forma.
+
+## Decisión
+
+Para `trendbo-xau-h4-channel`, B1 y B4 se reemplazan por:
+
+- **B1' — Repetición y vivo corto:**
+  1. **Repetición:** el `PaperTrader` procesa una por una las velas H4 reales de MT5 de los **últimos 12 meses**, como si fuera en vivo, con un proceso nuevo cada cierto número de velas para probar los reinicios. Debe dar cero errores, ningún duplicado y `paper report` con paridad `ok` (cero diferencias sin explicar).
+  2. **Vivo:** al menos **10 días hábiles** de `paper tick` en vivo sin errores no controlados (`stale_data` no cuenta como error).
+- **B4' — Spread histórico real:** con el historial de ticks de MT5 (MetaQuotes-Demo), se toma el spread del **primer tick después de cada cierre H4** de los últimos 6 meses.
+  - Si la **mediana es ≤ 30 puntos**, B4' se cumple.
+  - Si es **mayor**, se vuelve a correr la Puerta A (A1–A9 y A11; A10 ya está usada) con el spread medido (mediana redondeada hacia arriba). Si la regla deja de pasar, **no va a demo**.
+  - Ese umbral y ese procedimiento no se cambian después de ver el número.
+- **B2 y B3** no cambian.
+- **Demo:** necesita el ejecutor demo de la Fase 11 (con su verificación de cuenta demo y de duplicados), `ALLOW_DEMO_ORDERS=true` y la contraseña de operación de la cuenta **demo** en `.env`. El riesgo, el lote y los límites son los mismos del paper.
+- **Dinero real: sin cambios.** La Puerta C sigue igual. Una cuenta real solo se abre con una ADR propia, y nunca la habilita ninguna de estas pruebas.
+
+## Consecuencias
+
+- La demo puede empezar en 2–3 semanas en lugar de 8.
+- La repetición sobre velas pasadas no mide el llenado al tick en vivo. Eso lo cubren los 10 días en vivo y después la propia demo.
+- El paper en vivo sigue corriendo en paralelo con la demo, como referencia.
