@@ -37,6 +37,10 @@ Advertencia (McLean y Pontiff 2016): tras publicarse, las anomalías rinden ~la 
 - Informativo: resultado antes y después de la publicación (oro: desde 2018; TOM: todo es posterior a 1988), operaciones por semana y vista con 10 USD por operación.
 - Son 3 pruebas (`gold-night-long`, `gold-day-short`, `tom-v1`).
 
+## Adenda 1 — 2026-10-15 (antes del código y de cualquier corrida)
+
+El spread del oro en las velas M1 de MetaQuotes es 0 en 2009–2010 y poco realista en otros tramos (mismo problema que la ADR 0006 vio en FX). Para el oro se usa **el mayor** entre el spread de la vela y el fijo de la ADR 0006 (30 puntos = 0.30 USD), más 0.05 USD de deslizamiento por lado. Para US500/US30 se usan los fijos de la ADR 0006 (spread 0.50 / 2.00 y deslizamiento 0.20 / 1.00 puntos de índice por lado). Ninguna regla de entrada o salida cambia.
+
 ## Consecuencias
 
 - Script de laboratorio `research/lab/calendar_effects.py` con auditoría de 20 operaciones. Si algo pasa, se porta a `src/` antes de paper.
