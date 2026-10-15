@@ -41,6 +41,21 @@ Las mismas reglas en XAUUSD H1, con el riesgo y los límites de la ADR 0014 (0.5
 - **Solo H1 pasa:** candidata adicional en el oro; misma regla.
 - **Ninguna pasa:** se sigue con el oro H4 tal como está; la ventaja queda marcada como posiblemente específica del oro (más débil de lo que parecía).
 
+## Resultado — 2026-10-15 (corrida sin A11)
+
+| | Canasta H4 (2012-08 → 2025-10) | Oro H1 (2004-06 → 2025-10) |
+|---|---|---|
+| Operaciones OOS | 1 602 (2.3 por semana) | 2 176 (2.0 por semana) |
+| PF costes ×1 / ×1.5 / ×2 | 1.02 / 1.00 / 0.97 | 1.05 / 0.98 / 0.93 |
+| Drawdown máx. | 13.4 % | 28.5 % |
+| Semanas positivas | 34 % | 39 % |
+| Semana media | +0.006 % | +0.03 % |
+| Criterios fallados | A4, A5, A7, A8 | A4, A5, A7 |
+
+- **Ninguna pasa la Puerta A.** A11 no se corre: no puede cambiar el veredicto.
+- Por instrumento (solo informativo, **no se elige**): el oro (PF 1.65) y USDJPY (1.49) son los únicos claramente positivos; 6 de 11 dan PF < 1. La canasta rechazó 4 831 señales por exposición al USD y 3 022 por el máximo de 3 posiciones.
+- **Lectura:** las mismas reglas no funcionan fuera del oro H4 ni en un marco más corto. La ventaja de `trendbo-xau-h4-channel` parece **específica del oro en H4** y por tanto más frágil de lo que sugería la ADR 0014 (ya se sabía que era evidencia débil: 1 de 10 versiones, ganancia solo de compras). Según lo pre-registrado: se sigue con el oro H4 tal como está.
+
 ## Consecuencias
 
 - Código: generalizar `trend_suite` a varios instrumentos y límites configurables, y un comando `backtest trend-basket`; la lógica de la estrategia no cambia.
