@@ -76,6 +76,17 @@ La primera prueba dio cero operaciones: las horas del parquet vienen en milisegu
 - **Variante informativa "como opera el socio"** (sin stop, cierre a 24 h, 0.03 lote, 8 400 USD): acierta el 92 % de las operaciones y aun así pierde **todos los años**; neto −41 800 USD, peor operación −771 USD, peor pérdida abierta −1 054 USD; la cuenta **se habría quemado**.
 - **Veredicto: no pasa la Puerta A. Hipótesis descartada**, sin afinar (no se prueban otros TP, horarios ni filtros).
 
+## Adenda 2 — 2026-10-15: familia "stop = 1/3 del objetivo" (pedida por Juan, DESPUÉS del resultado)
+
+Juan pide simular las mismas entradas con un stop que pongamos nosotros, siempre igual a un tercio del take-profit (riesgo 1 : beneficio 3). Se registra antes de correrla y con el aviso de que se añade tras un resultado negativo.
+
+- Mismas entradas, sesión, *D*, costes, una posición a la vez y cierre por tiempo a 120 min.
+- **TP** ∈ {0.45·D (su ganancia típica), 1.41·D (su TP cuando lo pone)}; **stop = TP / 3** (0.15·D y 0.47·D).
+- *k* ∈ {0.7, 1.0}; dirección ∈ {ambas, solo compras}. 8 variantes; con las 8 anteriores son 16 de las 20 permitidas.
+- Misma evaluación (walk-forward anual, A1–A9; A11 con 200 nulos solo si A3 y A4 se cumplen). A9: vecinos en *k* y en TP.
+- Referencia sin ventaja: con 1:3, el azar acierta ~25 % y da PF ≈ 1 antes de costes; los costes pesan más porque el stop es corto.
+- Si no pasa, la línea del estilo del socio queda cerrada del todo.
+
 ## Consecuencias
 
 - Hay que descargar M1 de 2010 a 2026 (~6 M velas; local, no se sube).

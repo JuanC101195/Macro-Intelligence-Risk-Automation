@@ -101,10 +101,18 @@ class Variant:
     s: float | None  # None = sin stop (informativa)
     direction: str
     time_stop: int = TIME_STOP_MIN
+    tp_d: float = TP_D
 
     @property
     def name(self) -> str:
-        return f"k{self.k}-s{self.s}-{self.direction}"
+        base = f"k{self.k}-s{self.s}-{self.direction}"
+        return base if self.tp_d == TP_D else f"{base}-tp{self.tp_d}"
+
+
+def family(kind: str) -> list[Variant]:
+    if kind == "stop3":  # adenda 2: stop = TP / 3
+        return [Variant(k, round(tp / 3, 4), d, tp_d=tp) for k in KS for tp in (0.45, 1.41) for d in DIRS]
+    return [Variant(k, s, d) for k in KS for s in SS for d in DIRS]
 
 
 def signals(m: Market, v: Variant) -> np.ndarray:
@@ -168,7 +176,7 @@ def simulate(m: Market, sig: np.ndarray, v: Variant, cost_mult: float = 1.0,
             entry = m.o[j] + m.spr[j] * cost_mult + slip
         else:
             entry = m.o[j] - slip
-        tp = entry + side * TP_D * d
+        tp = entry + side * v.tp_d * d
         sl = None if v.s is None else entry - side * v.s * d
         x, px, mae = exit_trade(m, j, side, entry, tp, sl, v.time_stop, cost_mult)
         pnl = side * (px - entry) - COMMISSION * cost_mult
@@ -212,22 +220,29 @@ def oos(trades: dict[str, pd.DataFrame], chosen: dict[int, str]) -> pd.DataFrame
     return pd.concat(parts).sort_values("t_in") if parts else pd.DataFrame()
 
 
-def neighbours(name: str) -> list[str]:
-    k, s, d = name.split("-")
-    k, s = float(k[1:]), float(s[1:])
-    out = [f"k{kk}-s{s}-{d}" for kk in KS if kk != k] + [f"k{k}-s{ss}-{d}" for ss in SS if ss != s]
+def neighbours(name: str, variants: list[Variant]) -> list[str]:
+    """Variantes que difieren en una sola dimensión de la rejilla (k o stop/TP), misma dirección."""
+    me = next(v for v in variants if v.name == name)
+    out = []
+    for v in variants:
+        if v.direction != me.direction or v.name == name:
+            continue
+        same_k = v.k == me.k
+        same_exit = (v.s, v.tp_d) == (me.s, me.tp_d)
+        if same_k != same_exit:
+            out.append(v.name)
     return out
 
 
 def gate(oos1: pd.DataFrame, oos15: pd.DataFrame, trades: dict[str, pd.DataFrame],
-         chosen: dict[int, str], null_p95: float | None) -> dict:
+         chosen: dict[int, str], null_p95: float | None, variants: list[Variant]) -> dict:
     r = oos1["r"].to_numpy()
     by_year = oos1.groupby("year")["r"].sum()
     best_year = by_year.idxmax() if len(by_year) else None
     years = sorted(chosen)
     nb_ok = True
     for name in set(chosen.values()):
-        for nb in neighbours(name):
+        for nb in neighbours(name, variants):
             sub = trades[nb][trades[nb]["year"].isin(years)]
             nb_ok &= bool(len(sub)) and sub["r"].mean() > 0
     crit = {
@@ -267,15 +282,13 @@ def _init_worker() -> None:
         _IDX[int(y)] = np.flatnonzero(ok & (_M.year == y))
 
 
-def _null_run(args: tuple[int, dict[int, tuple[str, float, float]]]) -> float:
+def _null_run(args: tuple[int, dict[int, tuple[Variant, float, float]]]) -> float:
     seed, plan = args
     assert _M is not None
     m = _M
     rng = np.random.default_rng(seed)
     rs = []
-    for y, (name, p_entry, p_long) in plan.items():
-        k, s, d = name.split("-")
-        v = Variant(float(k[1:]), float(s[1:]), d)
+    for y, (v, p_entry, p_long) in plan.items():
         idx = _IDX[y]
         sig = np.zeros(len(m.t), dtype=int)
         sig[idx[rng.random(len(idx)) < p_entry]] = 1
@@ -284,14 +297,15 @@ def _null_run(args: tuple[int, dict[int, tuple[str, float, float]]]) -> float:
     return pf(np.concatenate(rs)) if rs else 0.0
 
 
-def null_plan(m: Market, trades: dict[str, pd.DataFrame], chosen: dict[int, str]) -> dict:
+def null_plan(m: Market, trades: dict[str, pd.DataFrame], chosen: dict[int, str],
+              by_name: dict[str, Variant]) -> dict:
     plan = {}
     for y, name in chosen.items():
         tr = trades[name][trades[name]["year"] == y]
         sess = m.session & ~np.isnan(m.d) & (m.year == y)
         busy = ((tr["t_out"] - tr["t_in"]) / NS + COOLDOWN_MIN).sum()
         free = max(sess.sum() - busy, 1)
-        plan[y] = (name, len(tr) / free, float((tr["side"] == 1).mean()) if len(tr) else 0.5)
+        plan[y] = (by_name[name], len(tr) / free, float((tr["side"] == 1).mean()) if len(tr) else 0.5)
     return plan
 
 
@@ -339,16 +353,15 @@ def naive_exit(m: Market, j: int, side: int, entry: float, tp: float, sl: float)
     return (m.c[k] - SLIP) if side == 1 else (m.c[k] + m.spr[k] + SLIP)
 
 
-def audit(m: Market, trades: pd.DataFrame, n: int = 20) -> dict:
+def audit(m: Market, trades: pd.DataFrame, v: Variant, n: int = 20) -> dict:
     rng = np.random.default_rng(7)
     sample = trades.iloc[rng.choice(len(trades), size=min(n, len(trades)), replace=False)]
     diffs = []
     for _, tr in sample.iterrows():
         j = int(np.searchsorted(m.t, tr["t_in"]))
         side = int(tr["side"])
-        tp = tr["entry"] + side * TP_D * tr["d"]
-        s = 0.75
-        sl = tr["entry"] - side * s * tr["d"]
+        tp = tr["entry"] + side * v.tp_d * tr["d"]
+        sl = tr["entry"] - side * v.s * tr["d"]
         diffs.append(abs(naive_exit(m, j, side, tr["entry"], tp, sl) - tr["exit"]))
     return {"checked": len(diffs), "max_abs_diff": round(float(max(diffs)), 6),
             "mismatches": int(sum(d > 1e-6 for d in diffs))}
@@ -359,9 +372,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nulls", type=int, default=200)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--family", choices=("base", "stop3"), default="base")
     args = ap.parse_args()
     m = load_market()
-    variants = [Variant(k, s, d) for k in KS for s in SS for d in DIRS]
+    variants = family(args.family)
+    by_name = {v.name: v for v in variants}
     t1 = {v.name: simulate(m, signals(m, v), v) for v in variants}
     t15 = {v.name: simulate(m, signals(m, v), v, cost_mult=1.5) for v in variants}
     last_year = int(m.year.max())
@@ -374,11 +389,13 @@ def main() -> None:
                                      "expectancy_r": round(float(t["r"].mean()), 4)}
                                  for n, t in t1.items()},
         "chosen_by_year": chosen,
-        "audit_k0.7_s0.75_both": audit(m, t1["k0.7-s0.75-both"]),
+        "audit": {variants[0].name: audit(m, t1[variants[0].name], variants[0])},
     }
     null_p95 = None
-    if args.nulls:
-        plan = null_plan(m, t1, chosen)
+    r_oos = o1["r"].to_numpy()
+    worth_nulls = len(r_oos) > 0 and r_oos.mean() > 0 and pf(r_oos) >= 1.20  # A11 solo si A3 y A4
+    if args.nulls and worth_nulls:
+        plan = null_plan(m, t1, chosen, by_name)
         with ProcessPoolExecutor(args.workers, initializer=_init_worker) as ex:
             null_pfs = list(ex.map(_null_run, [(s, plan) for s in range(args.nulls)]))
         null_p95 = float(np.percentile(null_pfs, 95))
@@ -386,9 +403,10 @@ def main() -> None:
         result["A11"] = {"null_pf_p95": round(null_p95, 3), "null_pf_median": round(float(np.median(null_pfs)), 3),
                          "observed_pf": round(obs, 3),
                          "p_value": round((1 + sum(p >= obs for p in null_pfs)) / (len(null_pfs) + 1), 4)}
-    result["gate_A"] = gate(o1, o15, t1, chosen, null_p95)
-    result["partner_style_no_stop"] = partner_style(m)
-    out = Path("research/reports/fade_xau_result.json")
+    result["gate_A"] = gate(o1, o15, t1, chosen, null_p95, variants)
+    if args.family == "base":
+        result["partner_style_no_stop"] = partner_style(m)
+    out = Path(f"research/reports/fade_xau_result_{args.family}.json")
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
