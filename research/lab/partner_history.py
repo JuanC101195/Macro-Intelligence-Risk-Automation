@@ -85,9 +85,11 @@ def read_report(path: Path) -> Report:
 
 
 def to_bar_index(times: pd.Series, bars: pd.DataFrame, offset_h: int) -> np.ndarray:
-    utc = (times - timedelta(hours=offset_h)).dt.tz_localize("UTC").dt.floor("5min")
-    idx = bars.index.get_indexer(utc)
-    return idx
+    # Última vela que empieza en o antes de la hora (pausas del oro y huecos
+    # de datos no tienen vela exacta; adenda 1 de la ADR 0013).
+    utc = (times - timedelta(hours=offset_h)).dt.tz_localize("UTC")
+    idx = bars.index.searchsorted(utc, side="right") - 1
+    return np.clip(idx, 0, len(bars) - 1)
 
 
 def alignment(pos: pd.DataFrame, bars: pd.DataFrame, offset_h: int) -> float:

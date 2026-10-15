@@ -61,6 +61,10 @@ Independiente del veredicto, se marca **riesgo de gestión alto** si más del 50
 - Con **indicio** o **evidencia preliminar**, el paso siguiente es medirlo **hacia adelante**: diario de operaciones en demo con stop-loss obligatorio, ≥ 100 operaciones, mismas métricas y nulos, con su propia ADR.
 - Con **sin evidencia**, se le muestran los resultados al socio y se cierra esta línea; no se buscan "sus mejores días" ni filtros dentro de este historial.
 
+## Adenda 1 — 2026-10-15 (bug antes de obtener resultados)
+
+La primera ejecución falló sin producir métricas: algunas horas de apertura o cierre no tienen una vela M5 que empiece exactamente en ese bloque de 5 minutos (pausa diaria del oro, huecos de datos), y el índice devolvía "no encontrado". Corrección: cada hora se asigna a la **última vela que empieza en o antes** de ella. No cambia ningún criterio.
+
 ## Consecuencias
 
 - El análisis es un script de laboratorio (`research/lab/partner_history.py`), sin tocar `src/`. Sus resultados quedan en `research/reports/` (local).
