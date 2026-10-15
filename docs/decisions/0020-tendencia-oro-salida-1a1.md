@@ -23,6 +23,23 @@ Aviso registrado: una salida 1 : 1 solo gana si la entrada acierta la dirección
 
 Arriesgar 10 USD por operación con 25–175 USD (ADR 0005) es 6–40 % del capital por operación; con rachas de 4–5 pérdidas, normales en cualquier estrategia, la cuenta se pierde. Con el 0.5 % de la política de riesgo, 10 USD por operación exige ~2 000 USD. Ningún resultado de esta ADR cambia la política de riesgo.
 
+## Resultado — 2026-10-15 (2004-06 → 2025-10, sin A11)
+
+| | Oro H4 1 : 1 | Oro H1 1 : 1 |
+|---|---|---|
+| Operaciones (por semana) | 1 146 (1.0) | 3 965 (3.6) |
+| Acierto | 53 % | 50.2 % |
+| PF costes ×1 / ×1.5 / ×2 | 1.08 / 1.07 / 1.05 | 0.96 / 0.89 / 0.83 |
+| Drawdown máx. (0.5 %) | 11.5 % | 38.8 % |
+| Con 10 USD por operación: neto 21 años | +460 USD | −749 USD |
+| Semana media / peor semana / peor mes | +0.42 / −28 / −33 USD | −0.67 / −43 / −95 USD |
+| Peor caída acumulada | −273 USD | −1 004 USD |
+| Criterios fallados | A4, A6, A7 | A3–A9 |
+
+- **Ninguna pasa la Puerta A.** A11 no se corre.
+- H1 1 : 1 acierta 50.2 %: la entrada no tiene ventaja en H1. H4 1 : 1 acierta 53 %: hay un poco de ventaja en la entrada, pero cortar la ganancia en 1R se come la mayor parte (PF 1.08 frente a 1.34 de la salida por canal, que deja correr las ganancias).
+- Se sigue con `trendbo-xau-h4-channel` sin cambios.
+
 ## Consecuencias
 
 - Código: opción `--target-r` en `backtest trend` (valores pre-registrados: 2.0 de la ADR 0014 y 1.0 de esta ADR) y métricas en dólares por R.
