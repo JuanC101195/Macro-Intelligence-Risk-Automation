@@ -60,6 +60,10 @@ Auditoría del oro: 20 de 20 operaciones idénticas a la versión vela a vela.
 - El cambio de mes es positivo (PF 1.13, drawdown muy bajo), pero no llega a 1.20, solo el 58 % de los semestres son positivos y dos vecinos (entrar un día antes, salir un día antes) son negativos: la ventaja es pequeña y frágil. **No se afina.** Queda anotado como el efecto publicado más cercano a pasar.
 - Hipótesis 20, 21 y 22: descartadas.
 
+## Adenda 2 — 2026-10-15 (bug en el cambio de mes, encontrado después del resultado)
+
+Las velas D1 de MetaQuotes vienen etiquetadas a las 21:00 UTC del día **anterior** (medianoche del servidor UTC+3). El script tomaba la fecha en UTC, así que cada sesión quedaba fechada un día antes: el primer día hábil de cada mes contaba como último del mes anterior. La regla realmente probada fue "entrar al cierre del día −3 y salir al del día +2", no la pre-registrada. Corrección: fecha de sesión = (hora + 3 h). Se re-ejecuta **solo `tom-v1` con la regla original**; el resultado anterior queda arriba como registro. Las pruebas del oro no cambian (usan M1 en hora de Nueva York).
+
 ## Consecuencias
 
 - Script de laboratorio `research/lab/calendar_effects.py` con auditoría de 20 operaciones. Si algo pasa, se porta a `src/` antes de paper.

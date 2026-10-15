@@ -123,7 +123,9 @@ def gold_run(g: Gold, kind: str, rates: list, shift: int = 0, cm: float = 1.0) -
 def load_d1(symbol: str) -> pd.DataFrame:
     f = sorted(glob.glob(f"research/datasets/{symbol}_D1_2004*.parquet"))[0]
     df = pd.read_parquet(f).sort_values("time").reset_index(drop=True)
-    df["date"] = df["time"].dt.tz_convert(None).dt.normalize()
+    # Las velas D1 vienen etiquetadas a las 21:00 UTC del día anterior (medianoche del
+    # servidor, UTC+3); la fecha de sesión es la del servidor (adenda 2 de la ADR 0022).
+    df["date"] = (df["time"] + pd.Timedelta(hours=3)).dt.tz_convert(None).dt.normalize()
     prev_c = df["close"].shift(1)
     tr = np.maximum(df["high"] - df["low"],
                     np.maximum((df["high"] - prev_c).abs(), (df["low"] - prev_c).abs()))
