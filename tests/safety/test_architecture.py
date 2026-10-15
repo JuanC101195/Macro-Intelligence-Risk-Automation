@@ -29,6 +29,9 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
              "trading_system.macro.crucix_client", "trading_system.models"),
     "execution": ("trading_system.strategy", "trading_system.models", "trading_system.macro"),
     "backtest": ("trading_system.broker.mt5_client",),
+    # storage persists state; it never decides, sizes or talks to the broker (ADR 0016)
+    "storage": ("trading_system.strategy", "trading_system.risk", "trading_system.backtest",
+                "trading_system.broker.mt5_client", "trading_system.workers"),
     "api": ("trading_system.broker.mt5_client", "trading_system.broker.orders",
             "trading_system.execution.demo_executor"),
 }
