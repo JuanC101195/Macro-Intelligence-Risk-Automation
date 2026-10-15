@@ -63,6 +63,10 @@ Mismas entradas, TP 0.45·D, **sin stop**, cierre por tiempo a 24 h, lote fijo 0
 - **Auditoría obligatoria antes de creer el resultado:** reproducir a mano 20 operaciones al azar (entrada, salida y resultado contra las velas) y comparar un mes completo con una implementación simple en bucle; cualquier diferencia se investiga antes de reportar.
 - Si alguna variante pasa la Puerta A, se porta a `src/` y se re-ejecuta con el motor propio antes de pasar a paper (Fase 7).
 
+## Adenda 1 — 2026-10-15 (bug antes de cualquier resultado)
+
+La primera prueba dio cero operaciones: las horas del parquet vienen en milisegundos y el código las trataba como nanosegundos, así que `ret60` y *D* quedaron vacíos. Se corrige la unidad. No cambia ninguna regla.
+
 ## Consecuencias
 
 - Hay que descargar M1 de 2010 a 2026 (~6 M velas; local, no se sube).

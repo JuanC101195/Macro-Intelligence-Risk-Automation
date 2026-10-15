@@ -61,7 +61,7 @@ def load_market() -> Market:
     frames = [pd.read_parquet(p) for p in sorted(glob.glob(DATA_GLOB))]
     df = pd.concat(frames).drop_duplicates("time").sort_values("time")
     df = df[df["time"] < CUTOFF].reset_index(drop=True)
-    t = df["time"].astype("int64").to_numpy()
+    t = df["time"].dt.as_unit("ns").astype("int64").to_numpy()  # el parquet viene en ms
     c = df["close"].to_numpy()
     prev = np.searchsorted(t, t - LOOKBACK_MIN * NS, side="right") - 1
     ret60 = np.where(prev >= 0, c - c[np.clip(prev, 0, None)], np.nan)
