@@ -41,6 +41,25 @@ Advertencia (McLean y Pontiff 2016): tras publicarse, las anomalías rinden ~la 
 
 El spread del oro en las velas M1 de MetaQuotes es 0 en 2009–2010 y poco realista en otros tramos (mismo problema que la ADR 0006 vio en FX). Para el oro se usa **el mayor** entre el spread de la vela y el fijo de la ADR 0006 (30 puntos = 0.30 USD), más 0.05 USD de deslizamiento por lado. Para US500/US30 se usan los fijos de la ADR 0006 (spread 0.50 / 2.00 y deslizamiento 0.20 / 1.00 puntos de índice por lado). Ninguna regla de entrada o salida cambia.
 
+## Resultado — 2026-10-15
+
+Auditoría del oro: 20 de 20 operaciones idénticas a la versión vela a vela.
+
+| | Oro noche (compra) | Oro día (venta) | Cambio de mes US500+US30 |
+|---|---|---|---|
+| Periodo / operaciones | 2009-01 → 2026-10 / 4 395 | 2009-01 → 2026-10 / 4 416 | 2012-08 → 2025-10 / 310 |
+| Acierto | 50.4 % | 46.5 % | 55.5 % |
+| PF costes ×1 / ×1.5 / ×2 | 1.00 / 0.92 / 0.85 | 0.87 / 0.81 / 0.75 | 1.13 / 1.05 / 0.99 |
+| Drawdown máx. (0.25 %) | 11.3 % | 14.3 % | 2.4 % |
+| Antes / después de la publicación | PF 0.89 (<2018) / 1.12 (≥2018) | 0.82 / 0.93 | (todo posterior) |
+| Con 10 USD por operación | −10 USD | −579 USD | +100 USD (+0.64 USD/semana con operación) |
+| Criterios fallados | A3–A9 | A3–A9 | A4, A6, A9 |
+
+- **Ninguna pasa la Puerta A.** A11 no se corre.
+- El efecto noche/día del oro no aparece en nuestros datos con costes (PF 1.00); la venta de día pierde todos los periodos.
+- El cambio de mes es positivo (PF 1.13, drawdown muy bajo), pero no llega a 1.20, solo el 58 % de los semestres son positivos y dos vecinos (entrar un día antes, salir un día antes) son negativos: la ventaja es pequeña y frágil. **No se afina.** Queda anotado como el efecto publicado más cercano a pasar.
+- Hipótesis 20, 21 y 22: descartadas.
+
 ## Consecuencias
 
 - Script de laboratorio `research/lab/calendar_effects.py` con auditoría de 20 operaciones. Si algo pasa, se porta a `src/` antes de paper.
