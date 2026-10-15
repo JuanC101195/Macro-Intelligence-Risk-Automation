@@ -16,6 +16,15 @@
 
 ## Registro
 
+### 2026-10-13 — H-TREND-XAU-1 (ADR 0014): EMA 50/200 + ruptura de 20 velas en oro — rama `feat/trend-breakout-xau`
+
+- Viene de un prompt externo que trajo Juan. Se pre-registraron 10 versiones: H4 y D1 × 4 salidas, más 2 controles sin filtro. Estrategia en `strategy/trend_breakout.py`, suite en `backtest/trend_suite.py`, comando `backtest trend --tf H4|D1 --exit channel|trailing|invalidation|target [--no-trend-filter] [--holdout]`.
+- **`trendbo-xau-h4-channel` es la primera hipótesis que cumple la Puerta A completa:** A1–A9 y A11 en la investigación (2004–2025) y A10 en el hold-out, evaluado una vez. Las otras 9 versiones fallan.
+- La auditoría independiente (pandas) dio cero discrepancias en 555 operaciones.
+- Evidencia débil: 1 de 10 pruebas, la ganancia viene de las compras en un oro alcista y el hold-out tuvo solo 20 operaciones. Además, un tercio de las señales del último año se rechazan por lote mínimo con el capital previsto.
+- **El hold-out del proyecto ya está usado** (`research/reports/holdout_used.json`).
+- Siguiente paso: Fase 7 (paper trading) con esta regla congelada. Dinero real no, y la restricción de capital se resuelve antes con una ADR propia.
+
 ### 2026-10-12 — Criterio A11 contra entradas aleatorias (ADR 0010) — rama `feat/a11-null-entries`
 
 - A11 en la Puerta A: el profit factor debe superar el percentil 95 de 200 versiones con entradas aleatorias (misma frecuencia de entradas ejecutadas, misma proporción LONG/SHORT, stops y objetivos en ATR tomados de las operaciones reales, misma salida, riesgo, costes y datos). Sin evaluar, A11 queda pendiente y la Puerta A no pasa. Opción `--null-runs` (200 por defecto) en `backtest run|carry|breakout|regime`.

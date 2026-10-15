@@ -49,7 +49,7 @@ class _Levels:
     atr: float | None
 
 
-def _prior_extremes(values: Sequence[float], window: int, use_max: bool) -> list[float | None]:
+def prior_extremes(values: Sequence[float], window: int, use_max: bool) -> list[float | None]:
     """Max/min of the `window` values BEFORE each index (current value excluded)."""
     out: list[float | None] = [None] * len(values)
     pick = max if use_max else min
@@ -69,10 +69,10 @@ class BreakoutStrategy:
             highs = [b.high for b in series]
             lows = [b.low for b in series]
             closes = [b.close for b in series]
-            eh = _prior_extremes(highs, params.entry_window, use_max=True)
-            el = _prior_extremes(lows, params.entry_window, use_max=False)
-            xh = _prior_extremes(highs, params.exit_window, use_max=True)
-            xl = _prior_extremes(lows, params.exit_window, use_max=False)
+            eh = prior_extremes(highs, params.entry_window, use_max=True)
+            el = prior_extremes(lows, params.entry_window, use_max=False)
+            xh = prior_extremes(highs, params.exit_window, use_max=True)
+            xl = prior_extremes(lows, params.exit_window, use_max=False)
             atr = ind.atr(highs, lows, closes, params.atr_period)
             for i, bar in enumerate(series):
                 self._levels[(sym, bar.time)] = _Levels(eh[i], el[i], xh[i], xl[i], atr[i])
