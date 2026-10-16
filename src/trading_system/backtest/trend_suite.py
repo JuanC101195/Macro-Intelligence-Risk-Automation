@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from statistics import median
 from typing import Any
@@ -43,9 +44,17 @@ TARGET_RS = (2.0, 1.0)  # 2.0 = ADR 0014, 1.0 = ADR 0020 (1:1)
 USD_PER_R = 10.0  # ADR 0020: "win 10 or lose 10" view of the same trades
 
 
+def is_target_r(value: float, expected: float) -> bool:
+    return math.isclose(value, expected, abs_tol=1e-9)
+
+
+def preregistered_target_r(value: float) -> bool:
+    return any(is_target_r(value, r) for r in TARGET_RS)
+
+
 def version_name(timeframe: Timeframe, exit_mode: ExitMode, trend_filter: bool,
                  target_r: float = 2.0) -> str:
-    if exit_mode == "target" and target_r == 1.0:
+    if exit_mode == "target" and is_target_r(target_r, 1.0):
         name = f"trendbo-xau-{timeframe.value.lower()}-target1r"
     else:
         name = f"trendbo-xau-{timeframe.value.lower()}-{exit_mode}"
