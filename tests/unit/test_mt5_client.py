@@ -238,5 +238,6 @@ def test_deals_are_converted_to_utc_and_filtered() -> None:
     assert deals[0].time == NOW
     assert deals[0].entry == "in"
     assert seen[0][1] == epoch  # server wall-clock epoch, not PC local time
+    naive_start, naive_end = datetime(2026, 1, 1), datetime(2026, 1, 2)
     with pytest.raises(ValueError, match="timezone-aware"):
-        client.deals(datetime(2026, 1, 1), datetime(2026, 1, 2))
+        client.deals(naive_start, naive_end)

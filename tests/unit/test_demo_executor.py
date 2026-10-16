@@ -68,7 +68,8 @@ def test_paper_settings_never_reach_the_terminal() -> None:
     ex = DemoExecutor(b, Settings(_env_file=None, symbols="XAUUSD",  # type: ignore[call-arg]
                                   default_symbol="XAUUSD"), clock=lambda: NOW)
     r = ex.submit(intent())
-    assert r.status == "rejected" and "TRADING_MODE" in r.message
+    assert r.status == "rejected"
+    assert "TRADING_MODE" in r.message
     assert b.terminal_calls == 0
     assert b.terminal.requests == []
 
@@ -76,14 +77,16 @@ def test_paper_settings_never_reach_the_terminal() -> None:
 def test_real_account_is_refused_before_the_terminal() -> None:
     ex, b = make(FakeDemoBroker(trade_mode="real"))
     r = ex.submit(intent())
-    assert r.status == "rejected" and "not demo" in r.message
+    assert r.status == "rejected"
+    assert "not demo" in r.message
     assert b.terminal_calls == 0
 
 
 def test_non_demo_intent_is_rejected() -> None:
     ex, b = make()
     r = ex.submit(intent(mode="paper"))
-    assert r.status == "rejected" and "mode paper" in r.message
+    assert r.status == "rejected"
+    assert "mode paper" in r.message
     assert b.terminal.requests == []
 
 
@@ -91,7 +94,8 @@ def test_non_demo_intent_is_rejected() -> None:
 def test_invalid_volume_is_rejected_without_sending(volume: float, fragment: str) -> None:
     ex, b = make()
     r = ex.submit(intent(volume=volume))
-    assert r.status == "rejected" and fragment in r.message
+    assert r.status == "rejected"
+    assert fragment in r.message
     assert b.terminal.requests == []
 
 
@@ -105,7 +109,8 @@ def test_price_moved_past_stop_or_target_is_rejected(bid: float, fragment: str) 
     ex, b = make()
     b.bid, b.ask = bid, bid + 0.30  # the market moved after the intent was built
     r = ex.submit(intent())
-    assert r.status == "rejected" and fragment in r.message
+    assert r.status == "rejected"
+    assert fragment in r.message
     assert b.terminal.requests == []
 
 
@@ -116,7 +121,8 @@ def test_buy_is_filled_with_magic_comment_and_stops() -> None:
     b.terminal.fill_price = 4000.50
     it = intent()
     r = ex.submit(it)
-    assert r.status == "filled" and r.broker_ticket == 1001
+    assert r.status == "filled"
+    assert r.broker_ticket == 1001
     assert r.slippage_points == pytest.approx(20.0)  # 0.20 USD worse than expected
     req = b.terminal.requests[0]
     assert req["magic"] == MAGIC
@@ -132,7 +138,8 @@ def test_sell_slippage_sign() -> None:
     ex, b = make()
     b.terminal.fill_price = 3999.90  # sold 0.10 lower than the bid: adverse
     r = ex.submit(intent(side="sell"))
-    assert r.status == "filled" and r.slippage_points == pytest.approx(10.0)
+    assert r.status == "filled"
+    assert r.slippage_points == pytest.approx(10.0)
     assert b.terminal.requests[0]["type"] == 1
 
 
@@ -149,7 +156,8 @@ def test_open_position_with_the_same_intent_is_a_duplicate() -> None:
     ex, b = make()
     assert ex.submit(intent()).status == "filled"
     again = ex.submit(intent())
-    assert again.status == "duplicate" and again.broker_ticket == 1001
+    assert again.status == "duplicate"
+    assert again.broker_ticket == 1001
     assert len(b.terminal.requests) == 1
 
 
@@ -158,7 +166,8 @@ def test_closed_position_found_in_history_is_a_duplicate() -> None:
     it = intent()
     b.history.append(FakeDemoBroker.deal(777, "buy", "in", 4000.3, it.intent_id))
     r = ex.submit(it)
-    assert r.status == "duplicate" and r.broker_ticket == 777
+    assert r.status == "duplicate"
+    assert r.broker_ticket == 777
     assert b.terminal.requests == []
 
 
@@ -175,7 +184,8 @@ def test_requote_is_rejected_without_retry() -> None:
     ex, b = make()
     b.terminal.script = [10004]
     r = ex.submit(intent())
-    assert r.status == "rejected" and "10004" in r.message
+    assert r.status == "rejected"
+    assert "10004" in r.message
     assert len(b.terminal.requests) == 1
 
 
@@ -183,7 +193,8 @@ def test_lost_answer_is_confirmed_by_state_without_resending() -> None:
     ex, b = make()
     b.terminal.script = ["ghost"]
     r = ex.submit(intent())
-    assert r.status == "filled" and "confirmed by state" in r.message
+    assert r.status == "filled"
+    assert "confirmed by state" in r.message
     assert len(b.terminal.requests) == 1
     assert len(b.open_positions) == 1
 
@@ -213,7 +224,9 @@ def test_close_sends_the_opposite_deal_for_that_position() -> None:
     assert ticket is not None
     r = ex.close(ticket, "signal_exit")
     req = b.terminal.requests[-1]
-    assert r.status == "filled" and req["position"] == ticket and req["type"] == 1
+    assert r.status == "filled"
+    assert req["position"] == ticket
+    assert req["type"] == 1
     assert req["price"] == b.bid
     assert req["comment"] == "x:signal_exit"
     assert b.open_positions == []
@@ -239,7 +252,8 @@ def test_modify_stop_uses_sltp_action() -> None:
     ticket = ex.submit(intent()).broker_ticket
     assert ticket is not None
     r = ex.modify_stop(ticket, 3990.0)
-    assert r.status == "filled" and b.terminal.requests[-1]["action"] == 6
+    assert r.status == "filled"
+    assert b.terminal.requests[-1]["action"] == 6
     assert b.open_positions[0].stop_loss == 3990.0
 
 
