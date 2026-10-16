@@ -26,11 +26,29 @@ RISK = 0.0025
 GOLD_MIN_SPREAD, GOLD_SLIP = 0.30, 0.05
 IDX_COST = {"US500": (0.50, 0.20), "US30": (2.00, 1.00)}  # (spread, deslizamiento por lado)
 # ADR 0023: spread MT5 del 2026-10-15 y deslizamiento 25 % del spread; moneda de financiación
-_INTL_SPREAD = {"DE40": 0.8, "CHINA50": 5.84, "CHINAH": 3.0, "IT40": 10.0, "NETH25": 0.2,
-                "SWI20": 1.7, "US2000": 5.5, "MIDDE50": 24.9, "TECHDE30": 39.9}
+_INTL_SPREAD = {
+    "DE40": 0.8,
+    "CHINA50": 5.84,
+    "CHINAH": 3.0,
+    "IT40": 10.0,
+    "NETH25": 0.2,
+    "SWI20": 1.7,
+    "US2000": 5.5,
+    "MIDDE50": 24.9,
+    "TECHDE30": 39.9,
+}
 INTL_COST = {s: (v, 0.25 * v) for s, v in _INTL_SPREAD.items()}
-INTL_CCY = {"DE40": "EUR", "IT40": "EUR", "NETH25": "EUR", "MIDDE50": "EUR", "TECHDE30": "EUR",
-            "SWI20": "CHF", "CHINA50": "USD", "US2000": "USD", "CHINAH": "USD"}  # HKD atado al USD
+INTL_CCY = {
+    "DE40": "EUR",
+    "IT40": "EUR",
+    "NETH25": "EUR",
+    "MIDDE50": "EUR",
+    "TECHDE30": "EUR",
+    "SWI20": "CHF",
+    "CHINA50": "USD",
+    "US2000": "USD",
+    "CHINAH": "USD",
+}  # HKD atado al USD
 COSTS = {**IDX_COST, **INTL_COST}
 MARKUP = 1.0
 DAY_OPEN, DAY_CLOSE = 8 * 60 + 20, 13 * 60 + 30
@@ -43,8 +61,9 @@ def usd_rate(rates: list[list], when: pd.Timestamp) -> float:
     return float(rates[i][1])
 
 
-def financing(rates: list[list], entry_t: pd.Timestamp, exit_t: pd.Timestamp, price: float,
-              cm: float) -> float:
+def financing(
+    rates: list[list], entry_t: pd.Timestamp, exit_t: pd.Timestamp, price: float, cm: float
+) -> float:
     nights = (exit_t.normalize() - entry_t.normalize()).days
     return nights * (max(usd_rate(rates, entry_t), 0.0) + MARKUP) / 100 / 360 * price * cm
 
@@ -54,7 +73,9 @@ class Gold:
     def __init__(self) -> None:
         files = sorted(glob.glob("research/datasets/XAUUSD_M1_20[0-2][0-9]0101_*.parquet"))
         files += glob.glob("research/datasets/XAUUSD_M1_20260922_*.parquet")
-        df = pd.concat(pd.read_parquet(f) for f in files).drop_duplicates("time").sort_values("time")
+        df = (
+            pd.concat(pd.read_parquet(f) for f in files).drop_duplicates("time").sort_values("time")
+        )
         df = df[df["time"] < pd.Timestamp("2026-10-16", tz="UTC")].reset_index(drop=True)
         ny = df["time"].dt.tz_convert(NY)
         self.t = ny
@@ -63,16 +84,23 @@ class Gold:
         self.spr = np.maximum(df["spread_points"].to_numpy() * 0.01, GOLD_MIN_SPREAD)
         self.mins = (ny.dt.hour * 60 + ny.dt.minute).to_numpy()
         self.date = ny.dt.normalize()
-        daily = df.assign(d=self.date).groupby("d").agg(h=("high", "max"), l=("low", "min"),
-                                                         c=("close", "last"))
+        daily = (
+            df.assign(d=self.date)
+            .groupby("d")
+            .agg(h=("high", "max"), l=("low", "min"), c=("close", "last"))
+        )
         prev_c = daily["c"].shift(1)
-        tr = np.maximum(daily["h"] - daily["l"],
-                        np.maximum((daily["h"] - prev_c).abs(), (daily["l"] - prev_c).abs()))
+        tr = np.maximum(
+            daily["h"] - daily["l"],
+            np.maximum((daily["h"] - prev_c).abs(), (daily["l"] - prev_c).abs()),
+        )
         self.atr = tr.rolling(14).mean().shift(1)  # solo días previos
         self.days = list(daily.index)
         starts = np.flatnonzero(np.r_[True, self.date.to_numpy()[1:] != self.date.to_numpy()[:-1]])
-        self.bounds = {d: (int(a), int(b)) for d, a, b in
-                       zip(self.days, starts, np.r_[starts[1:], len(df)])}
+        self.bounds = {
+            d: (int(a), int(b))
+            for d, a, b in zip(self.days, starts, np.r_[starts[1:], len(df)], strict=False)
+        }
 
     def bar_at(self, day: pd.Timestamp, minute: int) -> int | None:
         """Primera vela del día en o después del minuto dado (máx. 10 min de tolerancia)."""
@@ -81,8 +109,9 @@ class Gold:
         return a + int(seg[0]) if seg.size else None
 
 
-def gold_trade(g: Gold, i: int, j: int, side: int, atr: float, rates: list, cm: float
-               ) -> tuple[float, float] | None:
+def gold_trade(
+    g: Gold, i: int, j: int, side: int, atr: float, rates: list, cm: float
+) -> tuple[float, float] | None:
     slip = GOLD_SLIP * cm
     entry = g.o[i] + g.spr[i] * cm + slip if side == 1 else g.o[i] - slip
     stop = entry - side * 2 * atr
@@ -114,7 +143,7 @@ def gold_run(g: Gold, kind: str, rates: list, shift: int = 0, cm: float = 1.0) -
             continue
         if kind == "night":
             i = g.bar_at(day, d_close)
-            nxt = next((d for d in g.days[n + 1:n + 5] if d.weekday() < 5), None)
+            nxt = next((d for d in g.days[n + 1 : n + 5] if d.weekday() < 5), None)
             j = g.bar_at(nxt, d_open) if nxt is not None else None
             side = 1
         else:
@@ -128,18 +157,19 @@ def gold_run(g: Gold, kind: str, rates: list, shift: int = 0, cm: float = 1.0) -
 
 # ---------------------------------------------------------------------- TOM
 def load_d1(symbol: str) -> pd.DataFrame:
-    f = sorted(glob.glob(f"research/datasets/{symbol}_D1_2004*.parquet"))[0]
+    f = min(glob.glob(f"research/datasets/{symbol}_D1_2004*.parquet"))
     df = pd.read_parquet(f).sort_values("time").reset_index(drop=True)
     # Las velas D1 vienen etiquetadas a las 21:00 UTC del día anterior (medianoche del
     # servidor, UTC+3); la fecha de sesión es la del servidor (adenda 2 de la ADR 0022).
     df["date"] = (df["time"] + pd.Timedelta(hours=3)).dt.tz_convert(None).dt.normalize()
     prev_c = df["close"].shift(1)
-    tr = np.maximum(df["high"] - df["low"],
-                    np.maximum((df["high"] - prev_c).abs(), (df["low"] - prev_c).abs()))
+    tr = np.maximum(
+        df["high"] - df["low"], np.maximum((df["high"] - prev_c).abs(), (df["low"] - prev_c).abs())
+    )
     df["atr"] = tr.rolling(14).mean().shift(1)
     df["ym"] = df["date"].dt.to_period("M")
-    df["dom"] = df.groupby("ym").cumcount()  # 0 = primer día hábil
-    df["dom_rev"] = df.groupby("ym").cumcount(ascending=False)  # 0 = último
+    df["dom"] = df.groupby("ym").cumcount()  # posición del día hábil desde el inicio
+    df["dom_rev"] = df.groupby("ym").cumcount(ascending=False)  # posición desde el final
     return df[df["date"] < TOM_END].reset_index(drop=True)
 
 
@@ -155,33 +185,59 @@ def tom_trade(df: pd.DataFrame, i: int, j: int, symbol: str, rates: dict, cm: fl
             px = min(stop, df.at[k, "open"]) - slip
             exit_t = df.at[k, "date"]
             break
-    pnl = px - entry - financing(rates[symbol], pd.Timestamp(df.at[i, "date"], tz=NY),
-                                 pd.Timestamp(exit_t, tz=NY), entry, cm)
+    pnl = (
+        px
+        - entry
+        - financing(
+            rates[symbol],
+            pd.Timestamp(df.at[i, "date"], tz=NY),
+            pd.Timestamp(exit_t, tz=NY),
+            entry,
+            cm,
+        )
+    )
     return pnl / (2 * atr)
 
 
-def tom_run(data: dict[str, pd.DataFrame], rates: dict, entry_rev: int = 1, exit_dom: int = 2,
-            cm: float = 1.0, random_offsets: dict | None = None) -> pd.DataFrame:
+def _tom_window(df: pd.DataFrame, i: int, exit_dom: int) -> tuple[int, int] | None:
+    """(entrada, salida) del cambio de mes que empieza en i, o None si falta algo."""
+    if np.isnan(df.at[i, "atr"]):
+        return None
+    nxt = df.index[(df["ym"] == df.at[i, "ym"] + 1) & (df["dom"] == exit_dom)]
+    return (i, int(nxt[0])) if len(nxt) else None
+
+
+def _shifted(df: pd.DataFrame, window: tuple[int, int], start: int) -> tuple[int, int] | None:
+    """Misma duración, empezando en `start` (nulo de A11)."""
+    end = start + window[1] - window[0]
+    if end >= len(df) or np.isnan(df.at[start, "atr"]):
+        return None
+    return start, end
+
+
+def tom_run(
+    data: dict[str, pd.DataFrame],
+    rates: dict,
+    entry_rev: int = 1,
+    exit_dom: int = 2,
+    cm: float = 1.0,
+    random_offsets: dict | None = None,
+) -> pd.DataFrame:
     """entry_rev: 1 = penúltimo día hábil; exit_dom: 2 = tercer día hábil del mes siguiente."""
     rows = []
     for symbol, df in data.items():
-        entries = df.index[df["dom_rev"] == entry_rev]
-        for i in entries:
-            if np.isnan(df.at[i, "atr"]):
+        for i in df.index[df["dom_rev"] == entry_rev]:
+            window = _tom_window(df, int(i), exit_dom)
+            if window is not None and random_offsets is not None:
+                window = _shifted(df, window, random_offsets[(symbol, i)])
+            if window is None:
                 continue
-            nxt = df.index[(df["ym"] == df.at[i, "ym"] + 1) & (df["dom"] == exit_dom)]
-            if not len(nxt):
-                continue
-            j = int(nxt[0])
-            if random_offsets is not None:
-                hold = j - i
-                start = random_offsets[(symbol, i)]
-                i, j = start, start + hold
-                if j >= len(df) or np.isnan(df.at[i, "atr"]):
-                    continue
-            r = tom_trade(df, i, j, symbol, rates, cm)
-            rows.append((symbol, df.at[i, "date"], 1, r, RISK, r * RISK))
-    return pd.DataFrame(rows, columns=["symbol", "date", "side", "r", "risk", "ret"]).sort_values("date")
+            a, b = window
+            r = tom_trade(df, a, b, symbol, rates, cm)
+            rows.append((symbol, df.at[a, "date"], 1, r, RISK, r * RISK))
+    return pd.DataFrame(rows, columns=["symbol", "date", "side", "r", "risk", "ret"]).sort_values(
+        "date"
+    )
 
 
 def tom_null(data: dict[str, pd.DataFrame], rates: dict, base_keys: list, runs: int) -> list[float]:
@@ -204,7 +260,7 @@ def gold_audit(g: Gold, rates: list, n: int = 20) -> dict:
     for day in rng.permutation(g.days[20:-5]):
         atr = g.atr.get(day, np.nan)
         pos = g.days.index(day)
-        nxt = next((d for d in g.days[pos + 1:pos + 5] if d.weekday() < 5), None)
+        nxt = next((d for d in g.days[pos + 1 : pos + 5] if d.weekday() < 5), None)
         if np.isnan(atr) or day.weekday() >= 5 or nxt is None:
             continue
         i, j = g.bar_at(day, DAY_CLOSE), g.bar_at(nxt, DAY_OPEN)
@@ -236,22 +292,35 @@ def evaluate(base: pd.DataFrame, c15: pd.DataFrame, c2: pd.DataFrame, nbs: dict)
 
 def split(base: pd.DataFrame, year: int) -> dict:
     a, b = base[base["date"].dt.year < year], base[base["date"].dt.year >= year]
-    return {f"before_{year}_pf": round(pf(a["ret"].to_numpy()), 3),
-            f"from_{year}_pf": round(pf(b["ret"].to_numpy()), 3), f"from_{year}_trades": len(b)}
+    return {
+        f"before_{year}_pf": round(pf(a["ret"].to_numpy()), 3),
+        f"from_{year}_pf": round(pf(b["ret"].to_numpy()), 3),
+        f"from_{year}_trades": len(b),
+    }
 
 
 def tom_block(data: dict[str, pd.DataFrame], rates: dict, nulls: int) -> dict:
     base = tom_run(data, rates)
-    nbs = {"entry=-3": tom_run(data, rates, entry_rev=2), "entry=-1": tom_run(data, rates, entry_rev=0),
-           "exit=+2": tom_run(data, rates, exit_dom=1), "exit=+4": tom_run(data, rates, exit_dom=3)}
+    nbs = {
+        "entry=-3": tom_run(data, rates, entry_rev=2),
+        "entry=-1": tom_run(data, rates, entry_rev=0),
+        "exit=+2": tom_run(data, rates, exit_dom=1),
+        "exit=+4": tom_run(data, rates, exit_dom=3),
+    }
     res = evaluate(base, tom_run(data, rates, cm=1.5), tom_run(data, rates, cm=2.0), nbs)
     res["publication_split"] = split(base, 2012)
     if nulls and res["A1_to_A9_pass"]:
-        keys = [(s, int(data[s].index[data[s]["date"] == d][0])) for s, d in zip(base["symbol"], base["date"])]
+        keys = [
+            (s, int(data[s].index[data[s]["date"] == d][0]))
+            for s, d in zip(base["symbol"], base["date"], strict=False)
+        ]
         pfs = tom_null(data, rates, keys, nulls)
         obs = pf(base["ret"].to_numpy())
-        res["A11"] = {"null_pf_p95": round(float(np.percentile(pfs, 95)), 3), "observed_pf": round(obs, 3),
-                      "beats_p95": bool(obs > np.percentile(pfs, 95))}
+        res["A11"] = {
+            "null_pf_p95": round(float(np.percentile(pfs, 95)), 3),
+            "observed_pf": round(obs, 3),
+            "beats_p95": bool(obs > np.percentile(pfs, 95)),
+        }
     else:
         res["A11"] = "no corrido (A1–A9 no pasan)"
     return res
@@ -260,16 +329,26 @@ def tom_block(data: dict[str, pd.DataFrame], rates: dict, nulls: int) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--nulls", type=int, default=200)
-    ap.add_argument("--tom-intl", action="store_true", help="ADR 0023: solo cambio de mes internacional")
+    ap.add_argument(
+        "--tom-intl", action="store_true", help="ADR 0023: solo cambio de mes internacional"
+    )
     args = ap.parse_args()
-    all_rates = json.load(open("research/datasets/fred_rates.json", encoding="utf-8"))
+    with open("research/datasets/fred_rates.json", encoding="utf-8") as fh:
+        all_rates = json.load(fh)
     rates = all_rates["USD"]
     if args.tom_intl:
-        result = {"adr": "0023", "tom-v1-intl": tom_block(
-            {s: load_d1(s) for s in INTL_COST}, {s: all_rates[INTL_CCY[s]] for s in INTL_COST},
-            args.nulls)}
+        result = {
+            "adr": "0023",
+            "tom-v1-intl": tom_block(
+                {s: load_d1(s) for s in INTL_COST},
+                {s: all_rates[INTL_CCY[s]] for s in INTL_COST},
+                args.nulls,
+            ),
+        }
         out = Path("research/reports/tom_intl_result.json")
-        out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        out.write_text(
+            json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+        )
         print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
         return
     result = {"adr": "0022"}
@@ -279,14 +358,19 @@ def main() -> None:
     for kind, name in (("night", "gold-night-long"), ("day", "gold-day-short")):
         base = gold_run(g, kind, rates)
         nbs = {f"shift={s:+d}min": gold_run(g, kind, rates, shift=s) for s in (-60, 60)}
-        res = evaluate(base, gold_run(g, kind, rates, cm=1.5), gold_run(g, kind, rates, cm=2.0), nbs)
+        res = evaluate(
+            base, gold_run(g, kind, rates, cm=1.5), gold_run(g, kind, rates, cm=2.0), nbs
+        )
         res["publication_split"] = split(base, 2018)
-        res["A11"] = "solo si A1–A9 pasan" if not res["A1_to_A9_pass"] else "pendiente (correr aparte)"
+        res["A11"] = (
+            "solo si A1–A9 pasan" if not res["A1_to_A9_pass"] else "pendiente (correr aparte)"
+        )
         result[name] = res
         print(name, json.dumps(res["summary"], default=str)[:400], flush=True)
 
-    result["tom-v1"] = tom_block({s: load_d1(s) for s in IDX_COST}, {s: rates for s in IDX_COST},
-                                 args.nulls)
+    result["tom-v1"] = tom_block(
+        {s: load_d1(s) for s in IDX_COST}, dict.fromkeys(IDX_COST, rates), args.nulls
+    )
     out = Path("research/reports/calendar_effects_result.json")
     out.write_text(json.dumps(result, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))

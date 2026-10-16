@@ -107,10 +107,11 @@ class PaperStore:
         self._db.execute("BEGIN IMMEDIATE")
         try:
             yield
-        except BaseException:
+        except BaseException:  # includes GeneratorExit: an abandoned block never commits
             self._db.execute("ROLLBACK")
             raise
-        self._db.execute("COMMIT")
+        else:
+            self._db.execute("COMMIT")
 
     # --- key/value state ----------------------------------------------------------------
 
