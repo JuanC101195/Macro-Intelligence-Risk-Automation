@@ -1,0 +1,102 @@
+# ADR 0018 — Hipótesis: reversión de corto plazo en oro, estilo del socio (`fade-xau-v001`)
+
+- Fecha: 2026-10-15
+- Estado: aceptada (escrita y commiteada **antes** de escribir el backtest y de descargar la historia M1)
+
+## Contexto
+
+La ADR 0013 midió las 70 operaciones reales de oro del socio (3 semanas): resultado positivo, entradas mejores que el azar en momento (N2, p≈0.03) pero no en dirección (N1, p≈0.07), veredicto "sin evidencia (señal débil)" y riesgo de gestión alto (73 % sin stop). Juan cerró la línea de pedirle datos y pidió **simular su comportamiento** para tener muchas operaciones sin depender de él.
+
+Rasgos medidos en sus operaciones (análisis descriptivo, 2026-10-15), con *D* = mediana del movimiento absoluto del oro en 60 minutos dentro de su horario (6.93 USD en su periodo):
+
+| Rasgo | Socio | Azar (mismos días) |
+|---|---|---|
+| Entra contra el movimiento de los 60 min previos | 80 % | 51 % |
+| Movimiento previo de 60 min (en contra) | −0.69 *D* | ≈ 0 |
+| Posición en el rango de las 4 h previas (0 = mínimo) | 0.34 | 0.51 |
+| Ganancia típica / pérdida típica (precio) | +0.43 *D* / −0.62 *D* | — |
+| Stop cuando lo pone | 0.73 *D* | — |
+| Duración (mediana / percentil 75) | 10 / 103 min | — |
+| Horario (UTC) | 04–06 y 12–16 | — |
+
+Es una hipótesis de **reversión a la media de corto plazo** ("comprar la caída, vender el rebote"), distinta a todo lo probado (tendencia, ruptura, carry, pares, Fibonacci). Riesgo conocido: se diseñó mirando 3 semanas de un periodo (el oro bajó de ~4 300 a ~4 090), así que ese periodo queda **fuera** de toda prueba.
+
+## Decisión
+
+### Reglas (versión base)
+
+- **Datos:** XAUUSD M1 (MetaQuotes-Demo, precio bid y spread por vela), desde 2010-01-01 hasta 2026-09-23 (el día antes del periodo del socio). Lo posterior queda fuera.
+- ***D*:** mediana de |cierre − cierre de 60 min antes| en los minutos de sesión de los **20 días hábiles previos** (solo pasado; se recalcula una vez por día).
+- **Sesión de entrada:** minutos con hora UTC en {04, 05, 06, 12, 13, 14, 15, 16}.
+- **Señal al cierre de la vela M1 *t*:**
+  - `ret60` = cierre(*t*) − cierre(*t* − 60); `pos4h` = (cierre(*t*) − mínimo) / (máximo − mínimo) de las 240 velas previas a *t* (sin incluir *t*).
+  - **Compra** si `ret60 ≤ −k·D` y `pos4h ≤ 0.35`. **Venta** si `ret60 ≥ +k·D` y `pos4h ≥ 0.65`.
+- **Ejecución:** apertura de la vela *t* + 1; compra al ask (bid + spread de esa vela), venta al bid. Deslizamiento extra 0.05 USD por lado. Comisión 10 USD por lote ida y vuelta (la del socio).
+- **Salida (lo que ocurra primero):** take-profit a **0.45·D** del precio de entrada; stop-loss a **s·D**; cierre por tiempo a los **120 min**. Si stop y TP caen en la misma vela, cuenta el **stop** (conservador). Las salidas de compras se valoran al bid y las de ventas al ask.
+- **Una posición a la vez** (sin promediar). Sin nuevas entradas en los 5 minutos siguientes a una salida.
+- **Tamaño:** 0.25 % de riesgo por operación según la distancia del stop (para A7), sobre 10 000 USD.
+
+### Variantes (8, presupuesto ≤ 20)
+
+| Parámetro | Valores |
+|---|---|
+| *k* (caída previa) | 0.7, 1.0 |
+| *s* (stop) | 0.75, 1.5 |
+| Dirección | ambas, solo compras |
+
+El TP (0.45·D), la sesión, `pos4h` y el tope de 120 min **no** se varían.
+
+### Evaluación (Puerta A, ADR 0002 + A11 de la ADR 0010)
+
+- **Walk-forward anual:** se entrena con 3 años, se elige la variante con mayor profit factor (mínimo 100 operaciones en el entrenamiento) y se aplica al año siguiente. Ventanas de prueba 2013 → 2026-09-23. El OOS es la unión de los años de prueba.
+- Criterios A1–A9 y A11 como en las ADR 0002 y 0010. **A10 no se evalúa** (hold-out ya usado, `research/reports/holdout_used.json`); la Puerta A puede pasarse sin A10 solo con el aviso explícito de que no hay hold-out.
+- **A11 (nulo):** 200 versiones con entradas aleatorias en los mismos minutos de sesión, con la misma probabilidad de entrada por día que las operaciones ejecutadas, la misma proporción de compras y las mismas salidas (TP, stop y tiempo en unidades de *D*).
+- **A9:** vecinos en la rejilla (*k* y *s* contiguos) con expectancy > 0.
+
+### Variante informativa "como opera el socio" (no se evalúa ni se opera)
+
+Mismas entradas, TP 0.45·D, **sin stop**, cierre por tiempo a 24 h, lote fijo 0.03 sobre 8 400 USD. Solo para mostrar qué le habría pasado en 16 años a su forma de gestionar: peor pérdida abierta, peor día, peor mes y si la cuenta habría sobrevivido.
+
+### Implementación
+
+- Backtest vectorizado de laboratorio en `research/lab/fade_xau.py` (numpy), porque 16 años de M1 (~6 millones de velas) × 200 nulos no caben en el motor propio en tiempo razonable.
+- **Auditoría obligatoria antes de creer el resultado:** reproducir a mano 20 operaciones al azar (entrada, salida y resultado contra las velas) y comparar un mes completo con una implementación simple en bucle; cualquier diferencia se investiga antes de reportar.
+- Si alguna variante pasa la Puerta A, se porta a `src/` y se re-ejecuta con el motor propio antes de pasar a paper (Fase 7).
+
+## Adenda 1 — 2026-10-15 (bug antes de cualquier resultado)
+
+La primera prueba dio cero operaciones: las horas del parquet vienen en milisegundos y el código las trataba como nanosegundos, así que `ret60` y *D* quedaron vacíos. Se corrige la unidad. No cambia ninguna regla.
+
+## Resultado — 2026-10-15
+
+- Datos: 6.1 M velas M1 (2009-01-02 → 2026-09-23). Auditoría: 20 de 20 operaciones idénticas a la versión vela a vela.
+- **Ninguna de las 8 variantes es positiva:** PF de 0.38 a 0.48 en todo el periodo (37 000–114 000 operaciones cada una).
+- **Sin costes, el PF es ≈ 1.00 todos los años** (0.92–1.06) y el acierto ronda el 62 %, que es lo que da el azar con TP 0.45·D y stop 0.75·D (0.75 / 1.2 = 62.5 %). La señal "entrar contra el movimiento de la última hora en la parte baja/alta del rango de 4 h" no tiene ventaja; los costes (spread + deslizamiento + comisión, entre el 7 % y el 130 % del TP según el año) la vuelven negativa.
+- Walk-forward 2013–2026: 45 851 operaciones OOS, PF 0.46, los 14 años negativos. **Falla A3–A9.** A11 no se corrió: con A3 y A4 fallidos no puede cambiar el veredicto.
+- **Variante informativa "como opera el socio"** (sin stop, cierre a 24 h, 0.03 lote, 8 400 USD): acierta el 92 % de las operaciones y aun así pierde **todos los años**; neto −41 800 USD, peor operación −771 USD, peor pérdida abierta −1 054 USD; la cuenta **se habría quemado**.
+- **Veredicto: no pasa la Puerta A. Hipótesis descartada**, sin afinar (no se prueban otros TP, horarios ni filtros).
+
+## Adenda 2 — 2026-10-15: familia "stop = 1/3 del objetivo" (pedida por Juan, DESPUÉS del resultado)
+
+Juan pide simular las mismas entradas con un stop que pongamos nosotros, siempre igual a un tercio del take-profit (riesgo 1 : beneficio 3). Se registra antes de correrla y con el aviso de que se añade tras un resultado negativo.
+
+- Mismas entradas, sesión, *D*, costes, una posición a la vez y cierre por tiempo a 120 min.
+- **TP** ∈ {0.45·D (su ganancia típica), 1.41·D (su TP cuando lo pone)}; **stop = TP / 3** (0.15·D y 0.47·D).
+- *k* ∈ {0.7, 1.0}; dirección ∈ {ambas, solo compras}. 8 variantes; con las 8 anteriores son 16 de las 20 permitidas.
+- Misma evaluación (walk-forward anual, A1–A9; A11 con 200 nulos solo si A3 y A4 se cumplen). A9: vecinos en *k* y en TP.
+- Referencia sin ventaja: con 1:3, el azar acierta ~25 % y da PF ≈ 1 antes de costes; los costes pesan más porque el stop es corto.
+- Si no pasa, la línea del estilo del socio queda cerrada del todo.
+
+### Resultado de la adenda 2
+
+- Auditoría 20/20 idénticas. Todo el periodo: TP 0.45·D / stop 0.15·D → PF 0.10; TP 1.41·D / stop 0.47·D → PF 0.37–0.39.
+- **Antes de costes sí aparece una ventaja pequeña:** acierto 27.6 % y 26.7 % frente al ~25 % del azar (PF bruto 1.14 y 1.07). Es coherente con el N2 de la ADR 0013 (buen momento de entrada), pero es mucho menor que los costes: spread + deslizamiento + comisión ≈ 0.4 USD por operación, frente a stops de 1–3 USD.
+- Walk-forward 2013–2026: 58 966 operaciones, PF 0.33, 13 de 14 años negativos. **Falla A3–A9; no pasa la Puerta A.**
+- Años recientes con TP 1.41·D (0.03 lote): 2025 −5 094 USD (PF 0.82); 2026 hasta el 23-sep −848 USD (PF 0.98); en las 3 semanas del socio −197 USD (PF 0.91).
+- **Línea del estilo del socio cerrada del todo** (16 de 20 variantes usadas; no se gastan las restantes en afinar).
+
+## Consecuencias
+
+- Hay que descargar M1 de 2010 a 2026 (~6 M velas; local, no se sube).
+- Si no pasa, la idea del estilo del socio queda descartada también como estrategia mecánica; no se afina (regla de pivotar, no afinar).
+- Ningún resultado de esta ADR autoriza operar como el socio sin stop.
