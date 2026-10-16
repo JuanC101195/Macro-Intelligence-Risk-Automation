@@ -178,9 +178,7 @@ def descriptive(pos: pd.DataFrame, start: float) -> dict:
 def mae_usd(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray) -> np.ndarray:
     low, high = bars["low"].to_numpy(), bars["high"].to_numpy()
     out = np.zeros(len(pos))
-    for j, (d, p, v) in enumerate(
-        zip(pos["dir"], pos["open_price"], pos["volume"], strict=True)
-    ):
+    for j, (d, p, v) in enumerate(zip(pos["dir"], pos["open_price"], pos["volume"], strict=True)):
         seg = slice(e[j], x[j] + 1)
         adverse = p - low[seg].min() if d == 1 else high[seg].max() - p
         out[j] = max(adverse, 0.0) * CONTRACT_OZ * v
@@ -230,41 +228,63 @@ def spread_cost_by_hour(bars: pd.DataFrame) -> np.ndarray:
     return np.array([med.get(h, med.median()) for h in range(24)]) * POINT
 
 
+class _Bars:
+    """Arrays de las velas usadas para medir y para el nulo N2."""
+
+    def __init__(self, bars: pd.DataFrame) -> None:
+        self.opens = bars["open"].to_numpy()
+        self.hours = bars.index.hour.to_numpy()
+        self.dates = bars.index.date
+        self.cost_h = spread_cost_by_hour(bars)
+
+    def observed(self, pos: pd.DataFrame, e: np.ndarray, x: np.ndarray) -> np.ndarray:
+        vol = pos["volume"].to_numpy()
+        return (
+            pos["dir"].to_numpy() * (self.opens[x] - self.opens[e]) * CONTRACT_OZ * vol
+            - self.cost_h[self.hours[e]] * CONTRACT_OZ * vol
+        )
+
+    def timing_null(
+        self,
+        pos: pd.DataFrame,
+        e: np.ndarray,
+        x: np.ndarray,
+        p_long: float,
+        rng: np.random.Generator,
+    ) -> tuple[np.ndarray, int, int]:
+        """N2: misma duración y lote, hora de entrada y dirección al azar el mismo día."""
+        vol = pos["volume"].to_numpy()
+        dur = x - e
+        h_lo, h_hi = int(self.hours[e].min()), int(self.hours[e].max())
+        in_hours = (self.hours >= h_lo) & (self.hours <= h_hi)
+        last = len(self.opens) - 1
+        n2 = np.empty((N_SIMS, len(pos)))
+        for j in range(len(pos)):
+            cand = np.flatnonzero((self.dates == self.dates[e[j]]) & in_hours)
+            cand = cand[cand + dur[j] <= last]
+            if cand.size == 0:
+                cand = np.array([e[j]])
+            starts = rng.choice(cand, size=N_SIMS)
+            d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
+            n2[:, j] = (
+                d2 * (self.opens[starts + dur[j]] - self.opens[starts]) * CONTRACT_OZ * vol[j]
+                - self.cost_h[self.hours[starts]] * CONTRACT_OZ * vol[j]
+            )
+        return n2, h_lo, h_hi
+
+
 def simulate(pos: pd.DataFrame, bars: pd.DataFrame, e: np.ndarray, x: np.ndarray) -> dict:
-    opens = bars["open"].to_numpy()
-    hours = bars.index.hour.to_numpy()
-    dates = bars.index.date
-    cost_h = spread_cost_by_hour(bars)
+    b = _Bars(bars)
     vol = pos["volume"].to_numpy()
-    dur = x - e
-    obs = (
-        pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol
-        - cost_h[hours[e]] * CONTRACT_OZ * vol
-    )
+    obs = b.observed(pos, e, x)
     p_long = float((pos["dir"] == 1).mean())
     rng = np.random.default_rng(SEED)
-    n = len(pos)
-
-    dirs = np.where(rng.random((N_SIMS, n)) < p_long, 1, -1)
+    dirs = np.where(rng.random((N_SIMS, len(pos))) < p_long, 1, -1)
     n1 = (
-        dirs * ((opens[x] - opens[e]) * CONTRACT_OZ * vol)[None, :]
-        - (cost_h[hours[e]] * CONTRACT_OZ * vol)[None, :]
+        dirs * ((b.opens[x] - b.opens[e]) * CONTRACT_OZ * vol)[None, :]
+        - (b.cost_h[b.hours[e]] * CONTRACT_OZ * vol)[None, :]
     )
-
-    h_lo, h_hi = int(hours[e].min()), int(hours[e].max())
-    last = len(opens) - 1
-    n2 = np.empty((N_SIMS, n))
-    for j in range(n):
-        cand = np.flatnonzero((dates == dates[e[j]]) & (hours >= h_lo) & (hours <= h_hi))
-        cand = cand[cand + dur[j] <= last]
-        if cand.size == 0:
-            cand = np.array([e[j]])
-        starts = rng.choice(cand, size=N_SIMS)
-        d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
-        n2[:, j] = (
-            d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j]
-            - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
-        )
+    n2, h_lo, h_hi = b.timing_null(pos, e, x, p_long, rng)
     return {
         "observed_net_our_prices": round(float(obs.sum()), 2),
         "observed_pf_our_prices": round(pf(obs), 3),
@@ -286,29 +306,9 @@ def simulate_v2(pos: pd.DataFrame, bars_m1: pd.DataFrame, e: np.ndarray, x: np.n
     dirs = np.where(rng.random((N_SIMS, n)) < p_long, 1, -1)
     n1 = dirs * move[None, :] + fees[None, :]
 
-    opens = bars_m1["open"].to_numpy()
-    hours = bars_m1.index.hour.to_numpy()
-    dates = bars_m1.index.date
-    cost_h = spread_cost_by_hour(bars_m1)
-    dur = x - e
-    obs_m1 = (
-        pos["dir"].to_numpy() * (opens[x] - opens[e]) * CONTRACT_OZ * vol
-        - cost_h[hours[e]] * CONTRACT_OZ * vol
-    )
-    h_lo, h_hi = int(hours[e].min()), int(hours[e].max())
-    last = len(opens) - 1
-    n2 = np.empty((N_SIMS, n))
-    for j in range(n):
-        cand = np.flatnonzero((dates == dates[e[j]]) & (hours >= h_lo) & (hours <= h_hi))
-        cand = cand[cand + dur[j] <= last]
-        if cand.size == 0:
-            cand = np.array([e[j]])
-        starts = rng.choice(cand, size=N_SIMS)
-        d2 = np.where(rng.random(N_SIMS) < p_long, 1, -1)
-        n2[:, j] = (
-            d2 * (opens[starts + dur[j]] - opens[starts]) * CONTRACT_OZ * vol[j]
-            - cost_h[hours[starts]] * CONTRACT_OZ * vol[j]
-        )
+    b = _Bars(bars_m1)
+    obs_m1 = b.observed(pos, e, x)
+    n2, h_lo, h_hi = b.timing_null(pos, e, x, p_long, rng)
     return {
         "observed_net_real_prices": round(float(obs_real.sum()), 2),
         "observed_net_m1_prices": round(float(obs_m1.sum()), 2),
