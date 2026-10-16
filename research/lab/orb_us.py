@@ -35,7 +35,7 @@ class Day:
     date: pd.Timestamp
     o: np.ndarray
     h: np.ndarray
-    l: np.ndarray
+    lo: np.ndarray
     c: np.ndarray
     spr: np.ndarray
     mins: np.ndarray
@@ -50,9 +50,18 @@ def load_days(symbol: str) -> list[Day]:
     df = df[(df["mins"] >= OPEN_MIN) & (df["mins"] < CLOSE_MIN)]
     days = []
     for date, g in df.groupby("date", sort=True):
-        days.append(Day(symbol, date, g["open"].to_numpy(), g["high"].to_numpy(),
-                        g["low"].to_numpy(), g["close"].to_numpy(),
-                        g["spread_points"].to_numpy() * 0.01, g["mins"].to_numpy()))
+        days.append(
+            Day(
+                symbol,
+                date,
+                g["open"].to_numpy(),
+                g["high"].to_numpy(),
+                g["low"].to_numpy(),
+                g["close"].to_numpy(),
+                g["spread_points"].to_numpy() * 0.01,
+                g["mins"].to_numpy(),
+            )
+        )
     return days
 
 
@@ -69,12 +78,13 @@ def setup(day: Day, n: int) -> tuple[int, int, float, float] | None:
     if e >= len(day.mins) or day.mins[e] >= OPEN_MIN + n + 5:
         return None
     move = day.c[rng[-1]] - day.o[0]
-    side = 1 if move > 0 else (-1 if move < 0 else 0)
-    return e, side, float(day.l[rng].min()), float(day.h[rng].max())
+    side = int(np.sign(move))
+    return e, side, float(day.lo[rng].min()), float(day.h[rng].max())
 
 
-def trade(day: Day, e: int, side: int, lo: float, hi: float, target_r: float,
-          cm: float) -> tuple[float, float, float] | None:
+def trade(
+    day: Day, e: int, side: int, lo: float, hi: float, target_r: float, cm: float
+) -> tuple[float, float, float] | None:
     """Devuelve (r, riesgo como fracción del capital, precio de salida) o None."""
     if side == 0:
         return None
@@ -96,11 +106,11 @@ def trade(day: Day, e: int, side: int, lo: float, hi: float, target_r: float,
 def exit_price(day: Day, e: int, side: int, stop: float, tp: float, cm: float) -> float:
     w = slice(e, len(day.mins))
     if side == 1:
-        lows, highs = day.l[w], day.h[w]
+        lows, highs = day.lo[w], day.h[w]
         hit_sl, hit_tp = np.flatnonzero(lows <= stop), np.flatnonzero(highs >= tp)
     else:
         sp = day.spr[w] * cm
-        lows, highs = day.l[w] + sp, day.h[w] + sp
+        lows, highs = day.lo[w] + sp, day.h[w] + sp
         hit_sl, hit_tp = np.flatnonzero(highs >= stop), np.flatnonzero(lows <= tp)
     k_sl = hit_sl[0] if hit_sl.size else np.inf
     k_tp = hit_tp[0] if hit_tp.size else np.inf
@@ -117,8 +127,13 @@ def exit_price(day: Day, e: int, side: int, stop: float, tp: float, cm: float) -
     return day.c[k] + day.spr[k] * cm + _slip(day.spr[k], cm)
 
 
-def run(days: list[Day], n: int, target_r: float = BASE_TARGET, cm: float = 1.0,
-        sides: dict[tuple[str, pd.Timestamp], int] | None = None) -> pd.DataFrame:
+def run(
+    days: list[Day],
+    n: int,
+    target_r: float = BASE_TARGET,
+    cm: float = 1.0,
+    sides: dict[tuple[str, pd.Timestamp], int] | None = None,
+) -> pd.DataFrame:
     rows = []
     for d in days:
         s = setup(d, n)
@@ -130,7 +145,9 @@ def run(days: list[Day], n: int, target_r: float = BASE_TARGET, cm: float = 1.0,
         t = trade(d, e, side, lo, hi, target_r, cm)
         if t is not None:
             rows.append((d.symbol, d.date, side, t[0], t[1], t[0] * t[1]))
-    return pd.DataFrame(rows, columns=["symbol", "date", "side", "r", "risk", "ret"]).sort_values("date")
+    return pd.DataFrame(rows, columns=["symbol", "date", "side", "r", "risk", "ret"]).sort_values(
+        "date"
+    )
 
 
 # ------------------------------------------------------------------------ métricas
@@ -145,8 +162,14 @@ def max_dd(ret: np.ndarray) -> float:
     return float(((peak - eq) / peak).max()) if len(ret) else 0.0
 
 
-def gate(base: pd.DataFrame, c15: pd.DataFrame, c2: pd.DataFrame, neighbours: dict[str, pd.DataFrame],
-         first: pd.Timestamp, last: pd.Timestamp) -> dict:
+def gate(
+    base: pd.DataFrame,
+    c15: pd.DataFrame,
+    c2: pd.DataFrame,
+    neighbours: dict[str, pd.DataFrame],
+    first: pd.Timestamp,
+    last: pd.Timestamp,
+) -> dict:
     ret = base["ret"].to_numpy()
     halves = base.groupby([base["date"].dt.year, (base["date"].dt.month - 1) // 6])["ret"].sum()
     years = base.groupby(base["date"].dt.year)["ret"].sum()
@@ -166,16 +189,24 @@ def gate(base: pd.DataFrame, c15: pd.DataFrame, c2: pd.DataFrame, neighbours: di
         "A1_to_A9_pass": all(crit.values()),
         "summary": {
             "period": [str(first.date()), str(last.date())],
-            "trades": len(ret), "win_rate": round(float((base["r"] > 0).mean()), 3),
-            "pf_costs_1_15_2": [round(pf(ret), 3), round(pf(c15["ret"].to_numpy()), 3),
-                                round(pf(c2["ret"].to_numpy()), 3)],
+            "trades": len(ret),
+            "win_rate": round(float((base["r"] > 0).mean()), 3),
+            "pf_costs_1_15_2": [
+                round(pf(ret), 3),
+                round(pf(c15["ret"].to_numpy()), 3),
+                round(pf(c2["ret"].to_numpy()), 3),
+            ],
             "expectancy_r": round(float(base["r"].mean()), 4),
             "max_dd_pct": round(max_dd(ret) * 100, 2),
             "positive_halves_pct": round(float((halves > 0).mean() * 100), 1),
             "by_year_pct": {int(k): round(float(v) * 100, 2) for k, v in years.items()},
-            "neighbours_expectancy_r": {k: round(float(v["r"].mean()), 4) for k, v in neighbours.items()},
+            "neighbours_expectancy_r": {
+                k: round(float(v["r"].mean()), 4) for k, v in neighbours.items()
+            },
             "long_share": round(float((base["side"] == 1).mean()), 3),
-            "per_symbol_pf": {s: round(pf(g["ret"].to_numpy()), 3) for s, g in base.groupby("symbol")},
+            "per_symbol_pf": {
+                s: round(pf(g["ret"].to_numpy()), 3) for s, g in base.groupby("symbol")
+            },
         },
     }
 
@@ -193,33 +224,41 @@ def weekly(base: pd.DataFrame) -> dict:
         "positive_weeks_pct": round(float((ret_w > 0).mean() * 100), 1),
         "worst_week_pct": round(float(ret_w.min() * 100), 2),
         "worst_month_pct": round(float(months["ret"].sum().min() * 100), 2),
-        "usd_10_per_trade": {"net": round(float(usd.sum()), 1),
-                             "mean_week": round(float(usd_w.mean()), 2),
-                             "worst_week": round(float(usd_w.min()), 1),
-                             "worst_month": round(float((months["r"].sum() * USD_PER_R).min()), 1),
-                             "worst_drawdown": round(float((curve - np.maximum.accumulate(curve)).min()), 1)},
+        "usd_10_per_trade": {
+            "net": round(float(usd.sum()), 1),
+            "mean_week": round(float(usd_w.mean()), 2),
+            "worst_week": round(float(usd_w.min()), 1),
+            "worst_month": round(float((months["r"].sum() * USD_PER_R).min()), 1),
+            "worst_drawdown": round(float((curve - np.maximum.accumulate(curve)).min()), 1),
+        },
     }
 
 
 def nulls(days: list[Day], n: int, base: pd.DataFrame, runs: int) -> dict:
     p_long = float((base["side"] == 1).mean())
-    keys = list(zip(base["symbol"], base["date"]))
+    keys = list(zip(base["symbol"], base["date"], strict=False))
     obs = pf(base["ret"].to_numpy())
     pfs = []
     for seed in range(runs):
         rng = np.random.default_rng(seed)
-        sides = {k: (1 if u < p_long else -1) for k, u in zip(keys, rng.random(len(keys)))}
+        sides = {
+            k: (1 if u < p_long else -1) for k, u in zip(keys, rng.random(len(keys)), strict=False)
+        }
         pfs.append(pf(run(days, n, sides=sides)["ret"].to_numpy()))
     p95 = float(np.percentile(pfs, 95))
-    return {"null_pf_p95": round(p95, 3), "null_pf_median": round(float(np.median(pfs)), 3),
-            "observed_pf": round(obs, 3), "beats_p95": bool(obs > p95),
-            "p_value": round((1 + sum(p >= obs for p in pfs)) / (runs + 1), 4)}
+    return {
+        "null_pf_p95": round(p95, 3),
+        "null_pf_median": round(float(np.median(pfs)), 3),
+        "observed_pf": round(obs, 3),
+        "beats_p95": bool(obs > p95),
+        "p_value": round((1 + sum(p >= obs for p in pfs)) / (runs + 1), 4),
+    }
 
 
 # ------------------------------------------------------------------------- auditoría
 def naive_exit(day: Day, e: int, side: int, stop: float, tp: float) -> float:
     for k in range(e, len(day.mins)):
-        lo, hi = day.l[k], day.h[k]
+        lo, hi = day.lo[k], day.h[k]
         if side == -1:
             lo, hi = lo + day.spr[k], hi + day.spr[k]
         if (lo <= stop) if side == 1 else (hi >= stop):
@@ -229,7 +268,11 @@ def naive_exit(day: Day, e: int, side: int, stop: float, tp: float) -> float:
         if (hi >= tp) if side == 1 else (lo <= tp):
             return tp
     k = len(day.mins) - 1
-    return day.c[k] - _slip(day.spr[k], 1.0) if side == 1 else day.c[k] + day.spr[k] + _slip(day.spr[k], 1.0)
+    return (
+        day.c[k] - _slip(day.spr[k], 1.0)
+        if side == 1
+        else day.c[k] + day.spr[k] + _slip(day.spr[k], 1.0)
+    )
 
 
 def audit(days: list[Day], n: int) -> dict:
@@ -244,7 +287,9 @@ def audit(days: list[Day], n: int) -> dict:
         t = trade(d, e, side, lo, hi, BASE_TARGET, 1.0)
         if t is None:
             continue
-        entry = d.o[e] + d.spr[e] + _slip(d.spr[e], 1.0) if side == 1 else d.o[e] - _slip(d.spr[e], 1.0)
+        entry = (
+            d.o[e] + d.spr[e] + _slip(d.spr[e], 1.0) if side == 1 else d.o[e] - _slip(d.spr[e], 1.0)
+        )
         stop = lo if side == 1 else hi
         tp = entry + side * BASE_TARGET * side * (entry - stop)
         diffs.append(abs(naive_exit(d, e, side, stop, tp) - t[2]))
@@ -270,7 +315,10 @@ def main() -> None:
         g["weekly"] = weekly(base)
         g["audit"] = audit(days, n)
         long_all = run(days, n, sides={(d.symbol, d.date): 1 for d in days})
-        g["control_always_long"] = {"trades": len(long_all), "pf": round(pf(long_all["ret"].to_numpy()), 3)}
+        g["control_always_long"] = {
+            "trades": len(long_all),
+            "pf": round(pf(long_all["ret"].to_numpy()), 3),
+        }
         if args.nulls and g["A1_to_A9_pass"]:
             g["A11"] = nulls(days, n, base, args.nulls)
         else:
